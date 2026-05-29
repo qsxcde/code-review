@@ -89,6 +89,7 @@ class ReviewWorkflowNodes:
         return {
             **state,
             "context": context,
+            "analyzed_file_count": len(files),
         }
 
     async def analyze_review(self, state: ReviewState) -> ReviewState:
@@ -99,7 +100,10 @@ class ReviewWorkflowNodes:
         }
 
     async def validate_result(self, state: ReviewState) -> ReviewState:
-        analysis = self._normalize_analysis(state["analysis"])
+        analysis = self._normalize_analysis(
+            state["analysis"],
+            analyzed_file_count=state["analyzed_file_count"],
+        )
         pr_data = state["pr_data"]
         response = ReviewAnalyzeResponse(
             pr=ReviewPRInfo(
@@ -156,7 +160,11 @@ class ReviewWorkflowNodes:
     def _has_truncated_patch(self, files: list[GitHubPRFile]) -> bool:
         return any(file.patch and len(file.patch) > MAX_PATCH_CHARS for file in files)
 
-    def _normalize_analysis(self, analysis: ReviewResult) -> ReviewResult:
+    def _normalize_analysis(
+        self,
+        analysis: ReviewResult,
+        analyzed_file_count: int,
+    ) -> ReviewResult:
         warnings = list(analysis.warnings)
         risks = []
         low_confidence_filtered_count = 0
@@ -192,7 +200,7 @@ class ReviewWorkflowNodes:
             highRiskCount=sum(1 for risk in risks if risk.severity == "high"),
             mediumRiskCount=sum(1 for risk in risks if risk.severity == "medium"),
             lowRiskCount=sum(1 for risk in risks if risk.severity == "low"),
-            analyzedFileCount=analysis.metrics.analyzedFileCount,
+            analyzedFileCount=analyzed_file_count,
         )
 
         return ReviewResult(

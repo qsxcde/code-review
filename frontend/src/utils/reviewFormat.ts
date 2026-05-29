@@ -92,7 +92,7 @@ ${suggestions}
 - 高风险：${data.analysis.metrics.highRiskCount}
 - 中风险：${data.analysis.metrics.mediumRiskCount}
 - 低风险：${data.analysis.metrics.lowRiskCount}
-- 分析文件数：${data.analysis.metrics.analyzedFileCount}
+- 入模文件数：${data.analysis.metrics.analyzedFileCount}
 - 耗时：${formatMs(data.durationMs)}
 `;
 }

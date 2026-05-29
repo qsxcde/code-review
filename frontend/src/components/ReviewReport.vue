@@ -63,7 +63,7 @@ const emit = defineEmits<{
         </div>
         <div class="metric">
           <strong>{{ report.analysis.metrics.analyzedFileCount }}</strong>
-          <span>文件</span>
+          <span>入模文件</span>
         </div>
       </div>
 

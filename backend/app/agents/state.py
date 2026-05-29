@@ -11,8 +11,8 @@ class ReviewState(TypedDict, total=False):
     pull_number: int
     pr_data: GitHubPR
     context: dict[str, Any]
+    analyzed_file_count: int
     analysis: ReviewResult
     response: ReviewAnalyzeResponse
     errors: list[str]
     started_at: float
-
