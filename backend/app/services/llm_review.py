@@ -52,6 +52,38 @@ class LLMReviewService:
 
         return self._parse_review_result(content)
 
+    async def analyze_payload(self, payload: dict[str, Any]) -> ReviewResult:
+        self._ensure_model_configured()
+
+        prompt = self._build_prompt()
+        schema = json.dumps(ReviewResult.model_json_schema(), ensure_ascii=False)
+
+        try:
+            llm = self._build_llm()
+            chain = prompt | llm
+            response = await chain.ainvoke(
+                {
+                    "schema": schema,
+                    "pr_payload": json.dumps(payload, ensure_ascii=False),
+                }
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Model request failed: {exc.__class__.__name__}",
+            ) from exc
+
+        content = getattr(response, "content", response)
+        if not isinstance(content, str):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Model returned an unsupported response format",
+            )
+
+        return self._parse_review_result(content)
+
     def _ensure_model_configured(self) -> None:
         if not self.api_key or not self.model:
             raise HTTPException(

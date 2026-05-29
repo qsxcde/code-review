@@ -23,6 +23,12 @@ class MockReviewRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class ReviewAnalyzeRequest(BaseModel):
+    pr_url: HttpUrl = Field(alias="prUrl")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class RiskItem(BaseModel):
     file: str
     line: int | None = None
@@ -58,4 +64,21 @@ class ReviewResult(BaseModel):
     risks: list[RiskItem]
     suggestions: list[ReviewSuggestion]
     metrics: ReviewMetrics
+
+
+class ReviewPRInfo(BaseModel):
+    title: str
+    url: str
+    author: str
+    owner: str
+    repo: str
+    number: int
+    baseBranch: str
+    headBranch: str
+
+
+class ReviewAnalyzeResponse(BaseModel):
+    pr: ReviewPRInfo
+    analysis: ReviewResult
+    durationMs: int
 
