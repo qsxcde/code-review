@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Clipboard,
   ExternalLink,
@@ -24,6 +25,7 @@ const loading = ref(false);
 const errorMessage = ref("");
 const copied = ref(false);
 const report = ref<ReviewAnalyzeResponse | null>(null);
+const analysisController = ref<AbortController | null>(null);
 
 const canSubmit = computed(() => prUrl.value.trim().length > 0 && !loading.value);
 
@@ -42,18 +44,33 @@ const suggestionLabel: Record<SuggestionType, string> = {
 async function runAnalysis() {
   if (!canSubmit.value) return;
 
+  const controller = new AbortController();
+  analysisController.value = controller;
   loading.value = true;
   errorMessage.value = "";
   copied.value = false;
 
   try {
-    report.value = await analyzePullRequest(prUrl.value.trim());
+    report.value = await analyzePullRequest(prUrl.value.trim(), {
+      signal: controller.signal,
+    });
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "分析失败";
   } finally {
-    loading.value = false;
+    if (analysisController.value === controller) {
+      analysisController.value = null;
+      loading.value = false;
+    }
   }
 }
+
+function cancelAnalysis() {
+  analysisController.value?.abort();
+}
+
+onUnmounted(() => {
+  cancelAnalysis();
+});
 
 async function copyMarkdown() {
   if (!report.value) return;
@@ -165,6 +182,15 @@ ${suggestions}
             <Loader2 v-if="loading" class="spin" :size="18" />
             <Play v-else :size="18" />
             <span>{{ loading ? "分析中" : "开始分析" }}</span>
+          </button>
+          <button
+            v-if="loading"
+            class="cancel-button"
+            type="button"
+            @click="cancelAnalysis"
+          >
+            <Ban :size="18" />
+            <span>取消</span>
           </button>
         </div>
         <p v-if="errorMessage" class="error-text">
@@ -311,4 +337,3 @@ ${suggestions}
     </section>
   </main>
 </template>
-

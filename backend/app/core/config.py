@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0", validation_alias="APP_VERSION")
     debug: bool = Field(default=False, validation_alias="APP_DEBUG")
     api_v1_prefix: str = Field(default="/api/v1", validation_alias="API_V1_PREFIX")
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     port: int = Field(default=8000, validation_alias="PORT")
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
         "github_token",
         "github_api_proxy",
         "review_api_token",
+        "log_level",
         "openai_api_key",
         "openai_base_url",
         "openai_model",

@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from typing import Any
 
@@ -6,6 +7,8 @@ from fastapi import HTTPException, status
 from pydantic import ValidationError
 
 from app.schemas.review import MockReviewRequest, ReviewResult
+
+logger = logging.getLogger(__name__)
 
 
 class LLMReviewService:
@@ -38,6 +41,17 @@ class LLMReviewService:
         except HTTPException:
             raise
         except Exception as exc:
+            logger.warning(
+                "llm_request_failed",
+                exc_info=True,
+                extra={
+                    "props": {
+                        "event": "llm_request_failed",
+                        "model": self.model,
+                        "error_type": exc.__class__.__name__,
+                    }
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Model request failed: {exc.__class__.__name__}",
@@ -70,6 +84,17 @@ class LLMReviewService:
         except HTTPException:
             raise
         except Exception as exc:
+            logger.warning(
+                "llm_request_failed",
+                exc_info=True,
+                extra={
+                    "props": {
+                        "event": "llm_request_failed",
+                        "model": self.model,
+                        "error_type": exc.__class__.__name__,
+                    }
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Model request failed: {exc.__class__.__name__}",
@@ -86,6 +111,16 @@ class LLMReviewService:
 
     def _ensure_model_configured(self) -> None:
         if not self.api_key or not self.model:
+            logger.error(
+                "llm_config_missing",
+                extra={
+                    "props": {
+                        "event": "llm_config_missing",
+                        "has_api_key": bool(self.api_key),
+                        "has_model": bool(self.model),
+                    }
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="OPENAI_API_KEY and OPENAI_MODEL are required for review analysis",
@@ -167,6 +202,15 @@ class LLMReviewService:
         try:
             return ReviewResult.model_validate(data)
         except ValidationError as exc:
+            logger.warning(
+                "llm_output_schema_invalid",
+                extra={
+                    "props": {
+                        "event": "llm_output_schema_invalid",
+                        "error_count": len(exc.errors()),
+                    }
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Model output does not match ReviewResult schema",

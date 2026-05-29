@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import Sequence
 from typing import Any
@@ -6,6 +7,8 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.schemas.github import GitHubPR, GitHubPRFile
+
+logger = logging.getLogger(__name__)
 
 GITHUB_PR_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)(?:[/?#].*)?$"
@@ -39,6 +42,17 @@ class GitHubPRService:
     async def fetch_pr(self, url: str) -> GitHubPR:
         owner, repo, number = self.parse_pr_url(url)
         headers = self._build_headers()
+        logger.info(
+            "github_pr_fetch_started",
+            extra={
+                "props": {
+                    "event": "github_pr_fetch_started",
+                    "owner": owner,
+                    "repo": repo,
+                    "number": number,
+                }
+            },
+        )
 
         try:
             async with httpx.AsyncClient(timeout=20, proxy=self.proxy) as client:
@@ -53,11 +67,35 @@ class GitHubPRService:
                     headers,
                 )
         except httpx.RequestError as exc:
+            logger.warning(
+                "github_api_connection_failed",
+                extra={
+                    "props": {
+                        "event": "github_api_connection_failed",
+                        "owner": owner,
+                        "repo": repo,
+                        "number": number,
+                        "error_type": exc.__class__.__name__,
+                    }
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to connect to GitHub API",
             ) from exc
 
+        logger.info(
+            "github_pr_fetch_completed",
+            extra={
+                "props": {
+                    "event": "github_pr_fetch_completed",
+                    "owner": owner,
+                    "repo": repo,
+                    "number": number,
+                    "changed_files": pr_data["changed_files"],
+                }
+            },
+        )
         return GitHubPR(
             owner=owner,
             repo=repo,
@@ -149,6 +187,18 @@ class GitHubPRService:
             page += 1
 
     def _raise_for_github_error(self, response: httpx.Response) -> None:
+        if response.is_error:
+            logger.warning(
+                "github_api_error",
+                extra={
+                    "props": {
+                        "event": "github_api_error",
+                        "status_code": response.status_code,
+                        "url_path": response.url.path,
+                    }
+                },
+            )
+
         if response.status_code == status.HTTP_404_NOT_FOUND:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
