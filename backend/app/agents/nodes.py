@@ -55,7 +55,11 @@ class ReviewWorkflowNodes:
         }
 
     async def fetch_pr_data(self, state: ReviewState) -> ReviewState:
-        pr_data = await self.github_service.fetch_pr(state["pr_url"])
+        pr_data = await self.github_service.fetch_parsed_pr(
+            state["owner"],
+            state["repo"],
+            state["pull_number"],
+        )
         return {
             **state,
             "pr_data": pr_data,

@@ -58,6 +58,9 @@ class GitHubPRService:
 
     async def fetch_pr(self, url: str) -> GitHubPR:
         owner, repo, number = self.parse_pr_url(url)
+        return await self.fetch_parsed_pr(owner, repo, number)
+
+    async def fetch_parsed_pr(self, owner: str, repo: str, number: int) -> GitHubPR:
         headers = self._build_headers()
         logger.info(
             "github_pr_fetch_started",
