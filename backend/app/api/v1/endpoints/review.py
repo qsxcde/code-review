@@ -10,7 +10,7 @@ from app.schemas.review import (
     ReviewAnalyzeResponse,
     ReviewResult,
 )
-from app.services.github_pr import GitHubPRService
+from app.services.github_pr import get_github_pr_service
 from app.services.llm_review import LLMReviewService
 
 router = APIRouter(
@@ -38,7 +38,7 @@ async def analyze_pr(
     request: ReviewAnalyzeRequest,
     settings: Settings = Depends(get_settings),
 ) -> ReviewAnalyzeResponse:
-    github_service = GitHubPRService(
+    github_service = get_github_pr_service(
         token=settings.github_token,
         proxy=settings.github_api_proxy,
     )

@@ -31,6 +31,16 @@ class GitHubPRService:
         self.token = token
         self.proxy = proxy
         self.base_url = "https://api.github.com"
+        self._client: httpx.AsyncClient | None = None
+
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=20, proxy=self.proxy)
+        return self._client
 
     def parse_pr_url(self, url: str) -> tuple[str, str, int]:
         match = GITHUB_PR_URL_RE.match(url)
@@ -62,17 +72,14 @@ class GitHubPRService:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=20, proxy=self.proxy) as client:
-                pr_data = await self._get_json(
-                    client,
-                    f"/repos/{owner}/{repo}/pulls/{number}",
-                    headers,
-                )
-                files_data = await self._get_paginated_json(
-                    client,
-                    f"/repos/{owner}/{repo}/pulls/{number}/files",
-                    headers,
-                )
+            pr_data = await self._get_json(
+                f"/repos/{owner}/{repo}/pulls/{number}",
+                headers,
+            )
+            files_data = await self._get_paginated_json(
+                f"/repos/{owner}/{repo}/pulls/{number}/files",
+                headers,
+            )
         except httpx.RequestError as exc:
             error_type = self._classify_request_error(exc)
             logger.warning(
@@ -159,12 +166,11 @@ class GitHubPRService:
 
     async def _get_json(
         self,
-        client: httpx.AsyncClient,
         path: str,
         headers: dict[str, str],
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = await client.get(
+        response = await self._get_client().get(
             f"{self.base_url}{path}",
             headers=headers,
             params=params,
@@ -180,7 +186,6 @@ class GitHubPRService:
 
     async def _get_paginated_json(
         self,
-        client: httpx.AsyncClient,
         path: str,
         headers: dict[str, str],
     ) -> list[dict[str, Any]]:
@@ -188,7 +193,7 @@ class GitHubPRService:
         items: list[dict[str, Any]] = []
 
         while True:
-            response = await client.get(
+            response = await self._get_client().get(
                 f"{self.base_url}{path}",
                 headers=headers,
                 params={"page": page, "per_page": 100},
@@ -246,3 +251,22 @@ class GitHubPRService:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"GitHub API request failed: {exc.response.status_code}",
             ) from exc
+
+
+_github_services: dict[tuple[str | None, str | None], GitHubPRService] = {}
+
+
+def get_github_pr_service(
+    token: str | None = None,
+    proxy: str | None = None,
+) -> GitHubPRService:
+    key = (token, proxy)
+    if key not in _github_services:
+        _github_services[key] = GitHubPRService(token=token, proxy=proxy)
+    return _github_services[key]
+
+
+async def close_github_pr_services() -> None:
+    for service in _github_services.values():
+        await service.aclose()
+    _github_services.clear()

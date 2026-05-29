@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
+from app.services.github_pr import close_github_pr_services
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,10 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    @app.on_event("shutdown")
+    async def close_http_clients() -> None:
+        await close_github_pr_services()
 
     @app.middleware("http")
     async def log_requests(request, call_next):
