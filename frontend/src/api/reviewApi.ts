@@ -126,6 +126,7 @@ function parseReviewAnalyzeResponse(data: unknown): ReviewAnalyzeResponse {
   assertStringArray(summary.impact, "analysis.summary.impact");
   assertRiskArray(analysis.risks);
   assertSuggestionArray(analysis.suggestions);
+  assertStringArray(analysis.warnings, "analysis.warnings");
   assertNumber(metrics.highRiskCount, "analysis.metrics.highRiskCount");
   assertNumber(metrics.mediumRiskCount, "analysis.metrics.mediumRiskCount");
   assertNumber(metrics.lowRiskCount, "analysis.metrics.lowRiskCount");

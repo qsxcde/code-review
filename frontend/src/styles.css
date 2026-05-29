@@ -345,11 +345,16 @@ input:focus {
   font-weight: 800;
 }
 
-.impact-list {
+.impact-list,
+.warning-list {
   margin: 0;
   padding-left: 20px;
   color: #25313d;
   line-height: 1.75;
+}
+
+.warning-list {
+  color: #8a5a12;
 }
 
 .risk-item,
