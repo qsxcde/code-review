@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.agents.graph import ReviewGraphRunner
+from app.agents.review import ReviewGraphRunner
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import require_rate_limit
 from app.core.security import require_api_token
@@ -10,8 +10,8 @@ from app.schemas.review import (
     ReviewAnalyzeResponse,
     ReviewResult,
 )
-from app.services.github_pr import get_github_pr_service
-from app.services.llm_review import LLMReviewService
+from app.services.github import get_github_pr_service
+from app.services.llm import LLMReviewService
 
 router = APIRouter(
     prefix="/review",

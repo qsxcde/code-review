@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.services.github_pr import close_github_pr_services
+from app.services.github import close_github_pr_services
 
 logger = logging.getLogger(__name__)
 

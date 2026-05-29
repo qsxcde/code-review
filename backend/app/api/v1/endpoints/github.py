@@ -4,7 +4,7 @@ from app.core.config import Settings, get_settings
 from app.core.rate_limit import require_rate_limit
 from app.core.security import require_api_token
 from app.schemas.github import GitHubPR, GitHubPRRequest
-from app.services.github_pr import get_github_pr_service
+from app.services.github import get_github_pr_service
 
 router = APIRouter(
     prefix="/github",
