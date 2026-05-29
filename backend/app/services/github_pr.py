@@ -6,6 +6,10 @@ from typing import Any
 import httpx
 from fastapi import HTTPException, status
 
+from app.core.exceptions import (
+    GITHUB_NETWORK_ERROR_MESSAGES,
+    classify_github_request_error,
+)
 from app.schemas.github import GitHubPR, GitHubPRFile
 
 logger = logging.getLogger(__name__)
@@ -13,13 +17,6 @@ logger = logging.getLogger(__name__)
 GITHUB_PR_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)(?:[/?#].*)?$"
 )
-
-GITHUB_NETWORK_ERROR_MESSAGES = {
-    "timeout": "GitHub API request timed out",
-    "proxy": "GitHub API proxy connection failed",
-    "connection": "Unable to establish a connection to GitHub API",
-    "network": "GitHub API network request failed",
-}
 
 
 class GitHubPRService:
@@ -84,7 +81,7 @@ class GitHubPRService:
                 headers,
             )
         except httpx.RequestError as exc:
-            error_type = self._classify_request_error(exc)
+            error_type = classify_github_request_error(exc)
             logger.warning(
                 "github_api_connection_failed",
                 extra={
@@ -157,15 +154,6 @@ class GitHubPRService:
             headers["Authorization"] = f"Bearer {self.token}"
 
         return headers
-
-    def _classify_request_error(self, exc: httpx.RequestError) -> str:
-        if isinstance(exc, httpx.TimeoutException):
-            return "timeout"
-        if isinstance(exc, httpx.ProxyError):
-            return "proxy"
-        if isinstance(exc, httpx.ConnectError):
-            return "connection"
-        return "network"
 
     async def _get_json(
         self,
