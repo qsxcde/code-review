@@ -64,6 +64,7 @@ class ReviewResult(BaseModel):
     risks: list[RiskItem]
     suggestions: list[ReviewSuggestion]
     metrics: ReviewMetrics
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ReviewPRInfo(BaseModel):
@@ -81,4 +82,3 @@ class ReviewAnalyzeResponse(BaseModel):
     pr: ReviewPRInfo
     analysis: ReviewResult
     durationMs: int
-

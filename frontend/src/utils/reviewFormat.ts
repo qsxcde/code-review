@@ -72,6 +72,13 @@ export function toMarkdown(data: ReviewAnalyzeResponse) {
 ## 总结
 ${data.analysis.summary.overview}
 
+## 审计提示
+${
+  data.analysis.warnings.length === 0
+    ? "- 暂无"
+    : data.analysis.warnings.map((item) => `- ${item}`).join("\n")
+}
+
 ## 影响范围
 ${data.analysis.summary.impact.map((item) => `- ${item}`).join("\n")}
 

@@ -157,11 +157,32 @@ class ReviewWorkflowNodes:
         return any(file.patch and len(file.patch) > MAX_PATCH_CHARS for file in files)
 
     def _normalize_analysis(self, analysis: ReviewResult) -> ReviewResult:
-        risks = [
-            risk
-            for risk in analysis.risks
-            if risk.confidence >= 0.5 and not (risk.severity == "high" and not risk.file)
-        ]
+        warnings = list(analysis.warnings)
+        risks = []
+        low_confidence_filtered_count = 0
+        missing_file_high_risk_count = 0
+
+        for risk in analysis.risks:
+            if risk.confidence < 0.5:
+                low_confidence_filtered_count += 1
+                continue
+
+            if risk.severity == "high" and not risk.file:
+                missing_file_high_risk_count += 1
+                risks.append(risk.model_copy(update={"file": "unknown"}))
+                continue
+
+            risks.append(risk)
+
+        if low_confidence_filtered_count:
+            warnings.append(
+                f"已过滤 {low_confidence_filtered_count} 个置信度低于 50% 的风险项。"
+            )
+        if missing_file_high_risk_count:
+            warnings.append(
+                f"已保留 {missing_file_high_risk_count} 个缺少文件定位的高风险项，并将文件标记为 unknown。"
+            )
+
         suggestions_by_key = {}
         for suggestion in analysis.suggestions:
             key = (suggestion.file, suggestion.type, suggestion.comment)
@@ -179,4 +200,5 @@ class ReviewWorkflowNodes:
             risks=risks,
             suggestions=list(suggestions_by_key.values()),
             metrics=metrics,
+            warnings=warnings,
         )

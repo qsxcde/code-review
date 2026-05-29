@@ -96,6 +96,15 @@ const emit = defineEmits<{
         </ul>
       </div>
 
+      <div v-if="report.analysis.warnings.length" class="section-block">
+        <h2>审计提示</h2>
+        <ul class="warning-list">
+          <li v-for="warning in report.analysis.warnings" :key="warning">
+            {{ warning }}
+          </li>
+        </ul>
+      </div>
+
       <div class="section-block">
         <h2>风险列表</h2>
         <div v-if="report.analysis.risks.length === 0" class="empty-state">

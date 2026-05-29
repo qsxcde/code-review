@@ -51,6 +51,7 @@ export interface ReviewResult {
   risks: RiskItem[];
   suggestions: ReviewSuggestion[];
   metrics: ReviewMetrics;
+  warnings: string[];
 }
 
 export interface ReviewAnalyzeResponse {
@@ -58,4 +59,3 @@ export interface ReviewAnalyzeResponse {
   analysis: ReviewResult;
   durationMs: number;
 }
-
