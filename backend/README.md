@@ -72,3 +72,18 @@ Content-Type: application/json
 ```
 
 This endpoint requires `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. If you use an OpenAI-compatible provider, also configure `OPENAI_BASE_URL`.
+
+## Full Review Analysis API
+
+Fetch a GitHub PR and run the LangGraph review workflow:
+
+```text
+POST http://localhost:8000/api/v1/review/analyze
+Content-Type: application/json
+
+{
+  "prUrl": "https://github.com/owner/repo/pull/123"
+}
+```
+
+The workflow parses the PR URL, fetches PR data from GitHub, builds a trimmed review context, calls the configured LLM, validates the structured result, and returns a review report.
