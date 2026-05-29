@@ -8,6 +8,10 @@ interface ApiErrorBody {
   detail?: unknown;
 }
 
+interface ApiErrorDetail {
+  message?: unknown;
+}
+
 interface AnalyzeOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -76,6 +80,11 @@ export async function analyzePullRequest(
         message = body.detail;
       } else if (Array.isArray(body.detail)) {
         message = "请求参数格式不正确";
+      } else if (body.detail && typeof body.detail === "object") {
+        const detail = body.detail as ApiErrorDetail;
+        if (typeof detail.message === "string") {
+          message = detail.message;
+        }
       }
     } catch {
       message = response.statusText || message;

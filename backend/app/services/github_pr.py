@@ -14,6 +14,13 @@ GITHUB_PR_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)(?:[/?#].*)?$"
 )
 
+GITHUB_NETWORK_ERROR_MESSAGES = {
+    "timeout": "GitHub API request timed out",
+    "proxy": "GitHub API proxy connection failed",
+    "connection": "Unable to establish a connection to GitHub API",
+    "network": "GitHub API network request failed",
+}
+
 
 class GitHubPRService:
     def __init__(
@@ -67,6 +74,7 @@ class GitHubPRService:
                     headers,
                 )
         except httpx.RequestError as exc:
+            error_type = self._classify_request_error(exc)
             logger.warning(
                 "github_api_connection_failed",
                 extra={
@@ -75,13 +83,18 @@ class GitHubPRService:
                         "owner": owner,
                         "repo": repo,
                         "number": number,
-                        "error_type": exc.__class__.__name__,
+                        "error_type": error_type,
+                        "exception_type": exc.__class__.__name__,
+                        "error_message": str(exc)[:300],
                     }
                 },
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Unable to connect to GitHub API",
+                detail={
+                    "code": f"github_{error_type}",
+                    "message": GITHUB_NETWORK_ERROR_MESSAGES[error_type],
+                },
             ) from exc
 
         logger.info(
@@ -134,6 +147,15 @@ class GitHubPRService:
             headers["Authorization"] = f"Bearer {self.token}"
 
         return headers
+
+    def _classify_request_error(self, exc: httpx.RequestError) -> str:
+        if isinstance(exc, httpx.TimeoutException):
+            return "timeout"
+        if isinstance(exc, httpx.ProxyError):
+            return "proxy"
+        if isinstance(exc, httpx.ConnectError):
+            return "connection"
+        return "network"
 
     async def _get_json(
         self,
