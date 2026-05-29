@@ -67,6 +67,7 @@ h1 {
 .panel-heading,
 .error-text,
 .external-link,
+.cancel-button,
 .secondary-button,
 .primary-button {
   display: inline-flex;
@@ -110,7 +111,7 @@ h1 {
 
 .input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 148px;
+  grid-template-columns: minmax(0, 1fr) 148px auto;
   gap: 12px;
 }
 
@@ -130,6 +131,7 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 
+.cancel-button,
 .primary-button,
 .secondary-button {
   justify-content: center;
@@ -156,6 +158,13 @@ input:focus {
   border: 1px solid #cbd7df;
   color: #25313d;
   background: #ffffff;
+}
+
+.cancel-button {
+  min-width: 102px;
+  color: #8a2a20;
+  border: 1px solid #e0b4ae;
+  background: #fff6f4;
 }
 
 .error-text {
@@ -508,4 +517,3 @@ input:focus {
     grid-template-columns: 1fr;
   }
 }
-
