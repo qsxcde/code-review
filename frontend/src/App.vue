@@ -226,9 +226,14 @@ const handleSelectView = (view: ActiveView) => {
   background: $primary-gradient;
 }
 
-.report-dialog .el-textarea__inner {
-  font-family: "SFMono-Regular", Consolas, monospace;
-  line-height: 1.6;
+.report-dialog {
+  .el-dialog {
+    max-width: 1040px;
+  }
+
+  .el-dialog__body {
+    padding-top: 10px;
+  }
 }
 
 .report-footer {

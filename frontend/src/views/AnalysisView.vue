@@ -67,6 +67,58 @@ const copyReport = async () => {
   await navigator.clipboard.writeText(reportMarkdown.value);
   ElMessage.success("报告已复制");
 };
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const renderMarkdownReport = (markdown: string) => {
+  const lines = markdown.split("\n");
+  const html: string[] = [];
+  let listOpen = false;
+
+  const closeList = () => {
+    if (!listOpen) return;
+    html.push("</ul>");
+    listOpen = false;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      closeList();
+      continue;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${escapeHtml(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("- ")) {
+      if (!listOpen) {
+        html.push("<ul>");
+        listOpen = true;
+      }
+      html.push(`<li>${escapeHtml(trimmed.slice(2))}</li>`);
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${escapeHtml(trimmed)}</p>`);
+  }
+
+  closeList();
+  return html.join("");
+};
 </script>
 
 <template>
@@ -126,15 +178,10 @@ const copyReport = async () => {
       v-model="reportDialogVisible"
       class="report-dialog"
       title="完整 Review 报告"
-      width="680px"
+      width="min(1040px, 92vw)"
       append-to-body
     >
-      <el-input
-        v-model="reportMarkdown"
-        type="textarea"
-        :rows="18"
-        resize="none"
-      />
+      <article class="rendered-report" v-html="renderMarkdownReport(reportMarkdown)" />
       <template #footer>
         <div class="report-footer">
           <el-button @click="copyReport">复制报告</el-button>
@@ -144,3 +191,70 @@ const copyReport = async () => {
     </el-dialog>
   </main>
 </template>
+
+<style scoped lang="scss">
+@use "../styles/variables" as *;
+
+.rendered-report {
+  box-sizing: border-box;
+  min-height: 520px;
+  max-height: min(68vh, 720px);
+  overflow: auto;
+  padding: 26px 30px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  color: $text;
+  background: #fff;
+  line-height: 1.75;
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(p),
+  :deep(ul) {
+    margin: 0;
+  }
+
+  :deep(h1) {
+    margin-bottom: 22px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid $line;
+    font-size: 26px;
+    font-weight: 900;
+  }
+
+  :deep(h2) {
+    margin-top: 26px;
+    margin-bottom: 12px;
+    color: $text;
+    font-size: 19px;
+    font-weight: 900;
+  }
+
+  :deep(h3) {
+    margin-top: 18px;
+    margin-bottom: 8px;
+    color: $text;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  :deep(p) {
+    margin-bottom: 10px;
+    color: $muted;
+    font-size: 15px;
+  }
+
+  :deep(ul) {
+    display: grid;
+    gap: 8px;
+    padding-left: 20px;
+    color: $muted;
+    font-size: 15px;
+  }
+
+  :deep(li::marker) {
+    color: $primary;
+  }
+}
+</style>
