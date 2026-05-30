@@ -45,6 +45,14 @@ export interface RiskStats {
   total: number;
 }
 
+export interface AiSummaryStats {
+  riskLevel: "低风险" | "中等风险" | "高风险";
+  riskTone: "low" | "medium" | "high";
+  riskIssues: number;
+  involvedFiles: number;
+  mergeAdvice: string;
+}
+
 export interface ChangedFile {
   folder: string;
   name: string;

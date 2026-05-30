@@ -7,7 +7,18 @@ import {
   Document,
   Setting,
 } from "@element-plus/icons-vue";
-import type { NavItem, PullRequestInfo, SummaryItem, RiskFile, ChangedFile, AiSuggestion, Issue, RiskLevel, RiskStats } from "./types/review";
+import type {
+  NavItem,
+  PullRequestInfo,
+  SummaryItem,
+  RiskFile,
+  ChangedFile,
+  AiSuggestion,
+  Issue,
+  RiskLevel,
+  RiskStats,
+  AiSummaryStats,
+} from "./types/review";
 import { normalizeGitHubPrUrl, mapAnalyzeResponse, analyzePR } from "./api/reviewApi";
 import AppSidebar from "./components/AppSidebar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
@@ -69,6 +80,14 @@ const riskStats = ref<RiskStats>({
   medium: 5,
   low: 1,
   total: 12,
+});
+
+const aiSummaryStats = ref<AiSummaryStats>({
+  riskLevel: "高风险",
+  riskTone: "high",
+  riskIssues: 12,
+  involvedFiles: 3,
+  mergeAdvice: "建议修复后合并",
 });
 
 const changedFiles = ref<ChangedFile[]>([
@@ -166,6 +185,7 @@ const handleAnalyze = async () => {
     summaryItems.value = mapped.summaryItems;
     riskFiles.value = mapped.riskFiles;
     riskStats.value = mapped.riskStats;
+    aiSummaryStats.value = mapped.summaryStats;
     changedFiles.value = mapped.changedFiles;
     if (mapped.riskFiles[0]) {
       selectedRiskPath.value = mapped.riskFiles[0].path;
@@ -235,7 +255,11 @@ const handleAnalyze = async () => {
         </div>
 
         <aside class="right-column">
-          <AISummaryPanel :top-issues="topIssues" :risk-label="riskLabel" />
+          <AISummaryPanel
+            :summary-stats="aiSummaryStats"
+            :top-issues="topIssues"
+            :risk-label="riskLabel"
+          />
         </aside>
       </section>
     </main>

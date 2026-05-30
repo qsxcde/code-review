@@ -1,4 +1,13 @@
-import type { ReviewAnalyzeResponse, SummaryItem, AiSuggestion, RiskFile, Issue, PullRequestInfo, ChangedFile } from "../types/review";
+import type {
+  ReviewAnalyzeResponse,
+  SummaryItem,
+  AiSuggestion,
+  RiskFile,
+  Issue,
+  PullRequestInfo,
+  ChangedFile,
+  AiSummaryStats,
+} from "../types/review";
 
 export const normalizeGitHubPrUrl = (value: string): string | null => {
   try {
@@ -60,6 +69,17 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
       data.analysis.metrics.highRiskCount +
       data.analysis.metrics.mediumRiskCount +
       data.analysis.metrics.lowRiskCount,
+  };
+
+  const riskTone: AiSummaryStats["riskTone"] =
+    riskStats.high > 0 ? "high" : riskStats.medium > 0 ? "medium" : "low";
+
+  const summaryStats: AiSummaryStats = {
+    riskLevel: riskTone === "high" ? "高风险" : riskTone === "medium" ? "中等风险" : "低风险",
+    riskTone,
+    riskIssues: riskStats.total,
+    involvedFiles: Object.keys(risksByFile).length || data.analysis.metrics.analyzedFileCount,
+    mergeAdvice: riskStats.high > 0 ? "建议修复后合并" : riskStats.medium > 0 ? "建议确认后合并" : "可合并",
   };
 
   const pullRequest: Partial<PullRequestInfo> = {
@@ -148,6 +168,7 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
     summaryItems,
     riskFiles,
     riskStats,
+    summaryStats,
     changedFiles,
     topIssues,
     aiSuggestions,
