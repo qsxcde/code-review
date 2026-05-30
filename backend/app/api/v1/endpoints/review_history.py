@@ -9,7 +9,8 @@ from app.schemas.review_history import (
     ReviewRecordDetail,
     ReviewRecordListResponse,
 )
-from app.services.review.history import add_feedback, delete_record, get_record_detail, list_records
+from app.services.review.feedback_service import add_feedback
+from app.services.review.record_service import delete_record, get_record_detail, list_records
 
 router = APIRouter(prefix="/review", tags=["review_history"])
 

@@ -31,10 +31,9 @@ class GitHubPRService:
 
     async def fetch_parsed_pr(self, owner: str, repo: str, number: int) -> GitHubPR:
         logger.info(
-            "github_pr_fetch_started",
+            "GitHub API 调用",
             extra={
                 "props": {
-                    "event": "github_pr_fetch_started",
                     "owner": owner,
                     "repo": repo,
                     "number": number,
@@ -50,16 +49,13 @@ class GitHubPRService:
         except httpx.RequestError as exc:
             error_type = self.client.classify_request_error(exc)
             logger.warning(
-                "github_api_connection_failed",
+                "GitHub API 连接失败",
                 extra={
                     "props": {
-                        "event": "github_api_connection_failed",
                         "owner": owner,
                         "repo": repo,
                         "number": number,
                         "error_type": error_type,
-                        "exception_type": exc.__class__.__name__,
-                        "error_message": str(exc)[:300],
                     }
                 },
             )
@@ -72,14 +68,12 @@ class GitHubPRService:
             ) from exc
 
         logger.info(
-            "github_pr_fetch_completed",
+            "GitHub API 完成",
             extra={
                 "props": {
-                    "event": "github_pr_fetch_completed",
                     "owner": owner,
                     "repo": repo,
-                    "number": number,
-                    "changed_files": pr_data["changed_files"],
+                    "files": pr_data["changed_files"],
                 }
             },
         )

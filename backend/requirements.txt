@@ -12,3 +12,4 @@ bcrypt==4.2.1
 PyJWT==2.10.1
 email-validator==2.2.0
 cryptography
+colorama==0.4.6

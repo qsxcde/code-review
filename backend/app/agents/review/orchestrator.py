@@ -5,7 +5,10 @@ import logging
 import time
 
 from app.agents.review.aggregator import detect_conflicts, merge_results
+from app.agents.review.context import ReviewContextBuilder
 from app.agents.review.graph import ReviewGraphRunner
+from app.agents.review.prompts.orchestrator_phase1 import SYSTEM_PROMPT as PHASE1_PROMPT
+from app.agents.review.prompts.orchestrator_phase2 import SYSTEM_PROMPT as PHASE2_PROMPT
 from app.agents.review.specialist import MULTI_AGENTS, SpecialistAgent
 from app.core.config import settings
 from app.schemas.github import GitHubPR
@@ -59,8 +62,6 @@ async def _run_single_agent_for(
 
 
 async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
-    from app.agents.review.prompts.orchestrator_phase1 import SYSTEM_PROMPT
-
     try:
         languages = list({f.filename.split(".")[-1] for f in pr_data.files if "." in f.filename})
         file_list = [f.filename for f in pr_data.files[:20]]
@@ -78,10 +79,18 @@ async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
             model=settings.deep_model,
         )
         wrapper = {"pr_payload": json.dumps(phase1_payload, ensure_ascii=False)}
-        result = await llm.analyze_payload(wrapper, system_prompt=SYSTEM_PROMPT)
-        return json.loads(result.summary.overview)
+        result = await llm.analyze_payload(wrapper, system_prompt=PHASE1_PROMPT)
+        focus_notes = json.loads(result.summary.overview)
+        logger.info(
+            "阶段1完成",
+            extra={"props": {
+                "安全重点": focus_notes.get("security_focus", "")[:40],
+                "性能重点": focus_notes.get("performance_focus", "")[:40],
+            }},
+        )
+        return focus_notes
     except Exception:
-        logger.warning("Phase 1 failed, proceeding without focus notes", exc_info=True)
+        logger.warning("阶段1失败，继续无焦点分析", exc_info=True)
         return None
 
 
@@ -89,8 +98,6 @@ async def _phase2_summarize(
     merged_response: ReviewAnalyzeResponse,
     conflicts: list[dict],
 ) -> ReviewAnalyzeResponse:
-    from app.agents.review.prompts.orchestrator_phase2 import SYSTEM_PROMPT
-
     try:
         summary_data = {
             "risks_count": len(merged_response.analysis.risks),
@@ -116,12 +123,12 @@ async def _phase2_summarize(
             model=settings.deep_model,
         )
         wrapper = {"pr_payload": json.dumps(summary_data, ensure_ascii=False)}
-        result = await llm.analyze_payload(wrapper, system_prompt=SYSTEM_PROMPT)
+        result = await llm.analyze_payload(wrapper, system_prompt=PHASE2_PROMPT)
         phase2_data = json.loads(result.summary.overview)
         merged_response.analysis.summary.overview = phase2_data.get("overview", "")
         merged_response.analysis.summary.impact = phase2_data.get("impact", [])
     except Exception:
-        logger.warning("Phase 2 failed, using merged summary", exc_info=True)
+        logger.warning("阶段2失败，使用合并摘要", exc_info=True)
 
     return merged_response
 
@@ -155,12 +162,21 @@ async def _run_multi_agent(
     valid_results: list[tuple[str, ReviewResult]] = []
     for agent, result in zip(MULTI_AGENTS, agent_results):
         if isinstance(result, Exception):
-            logger.error("Agent %s failed: %s", agent.name, result)
+            logger.error("Agent失败 | agent=%s error=%s", agent.name, result)
             continue
         valid_results.append(result)
 
     if not valid_results:
         raise RuntimeError("All specialist agents failed")
+
+    for _agent, r in valid_results:
+        m = r.metrics
+        total_risks = m.highRiskCount + m.mediumRiskCount + m.lowRiskCount
+        logger.info(
+            "%sAgent完成",
+            _agent,
+            extra={"props": {"risks": total_risks, "high": m.highRiskCount, "medium": m.mediumRiskCount}},
+        )
 
     # Build PR info for response
     pr_info = ReviewPRInfo(
@@ -182,6 +198,13 @@ async def _run_multi_agent(
     conflicts = detect_conflicts(merged.analysis.risks)
     merged = await _phase2_summarize(merged, conflicts)
 
+    final_m = merged.analysis.metrics
+    total_risks = final_m.highRiskCount + final_m.mediumRiskCount + final_m.lowRiskCount
+    logger.info(
+        "阶段2完成",
+        extra={"props": {"总风险": total_risks, "总建议": len(merged.analysis.suggestions)}},
+    )
+
     return merged
 
 
@@ -192,20 +215,16 @@ class ReviewOrchestrator:
     async def analyze(self, pr_url: str, pr_data: GitHubPR) -> ReviewAnalyzeResponse:
         if _should_use_multi_agent(pr_data):
             logger.info(
-                "Using multi-agent analysis for PR (files=%d, lines=%d)",
-                pr_data.changed_files,
-                pr_data.additions + pr_data.deletions,
+                "使用多Agent分析",
+                extra={"props": {"files": pr_data.changed_files, "lines": pr_data.additions + pr_data.deletions}},
             )
-            from app.agents.review.context import ReviewContextBuilder
-
             context_builder = ReviewContextBuilder()
             return await _run_multi_agent(
                 self.github_service, pr_data, context_builder, pr_url
             )
 
         logger.info(
-            "Using single-agent analysis for PR (files=%d, lines=%d)",
-            pr_data.changed_files,
-            pr_data.additions + pr_data.deletions,
+            "使用单Agent分析",
+            extra={"props": {"files": pr_data.changed_files, "lines": pr_data.additions + pr_data.deletions}},
         )
         return await _run_single_agent(self.github_service, pr_url)

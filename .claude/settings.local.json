@@ -8,7 +8,8 @@
       "Bash(python -c \"from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent; print\\('ok'\\)\")",
       "Bash(python -c \"from app.api.v1.endpoints.review import router; print\\('ok'\\)\")",
       "Bash(python -m pytest tests/ -v --ignore=tests/test_auth_endpoints.py --tb=line)",
-      "Bash(python -m compileall app/)"
+      "Bash(python -m compileall app/)",
+      "Bash(python *)"
     ]
   }
 }

@@ -71,16 +71,12 @@ class LLMReviewService:
                 if error_type in RETRIABLE_ERROR_TYPES and not is_last:
                     delay = BASE_DELAY_SECONDS * (2**attempt)
                     logger.warning(
-                        "llm_request_retrying",
+                        "LLM调用重试",
                         extra={
                             "props": {
-                                "event": "llm_request_retrying",
                                 "model": self.model,
                                 "attempt": attempt + 1,
-                                "next_delay_s": round(delay, 1),
-                                "error_type": error_type,
-                                "exception_type": exc.__class__.__name__,
-                                "error_message": error_message,
+                                "delay_s": delay,
                             }
                         },
                     )
@@ -88,16 +84,13 @@ class LLMReviewService:
                     continue
 
                 logger.warning(
-                    "llm_request_failed",
+                    "LLM调用失败",
                     exc_info=True,
                     extra={
                         "props": {
-                            "event": "llm_request_failed",
                             "model": self.model,
                             "attempt": attempt + 1,
-                            "error_type": error_type,
-                            "exception_type": exc.__class__.__name__,
-                            "error_message": error_message,
+                            "error": error_type,
                         }
                     },
                 )

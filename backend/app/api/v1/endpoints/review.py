@@ -1,3 +1,4 @@
+import logging
 import time
 
 from fastapi import APIRouter, Depends
@@ -16,12 +17,14 @@ from app.schemas.review import (
 )
 from app.services.github import get_github_pr_service
 from app.services.llm import LLMReviewService
-from app.services.review.history import (
+from app.services.review.record_service import (
     create_pending_record,
     find_cached_record,
     save_completed_record,
     save_failed_record,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/review",
@@ -67,6 +70,7 @@ async def analyze_pr(
     if pr_sha:
         cached = await find_cached_record(db, user_id, pr_sha)
         if cached is not None:
+            logger.info("命中缓存 | pr_sha=%s", pr_sha[:12])
             return cached
 
     record_id = await create_pending_record(
@@ -83,4 +87,5 @@ async def analyze_pr(
         raise
 
     await save_completed_record(db, record_id, response)
+    logger.info("持久化完成 | record_id=%d", record_id)
     return response
