@@ -1,7 +1,14 @@
+import asyncio
+import logging
 import re
 from typing import Any
 
+from app.agents.review.import_parser import parse_imports
+from app.agents.review.truncator import detect_language, smart_truncate
 from app.schemas.github import GitHubPR, GitHubPRFile
+from app.services.github.content import fetch_full_content
+
+logger = logging.getLogger(__name__)
 
 SKIPPED_FILE_SUFFIXES = (
     ".lock",
@@ -148,3 +155,42 @@ class ReviewContextBuilder:
             "files": file_patches,
             "file_count": analyzed_count,
         }, analyzed_count
+
+    async def enhance_files(
+        self, file_dicts: list[dict], owner: str, repo: str, ref: str, client
+    ) -> list[dict]:
+        """Enhance file dicts with full content and import analysis. Falls back gracefully.
+
+        Each file dict must contain at least ``"filename"``. After this call, each dict
+        gains the keys ``"full_content"``, ``"language"``, ``"imports"``, and
+        ``"had_full_content"``.
+        """
+        if client is None:
+            for f in file_dicts:
+                f["had_full_content"] = False
+            return file_dicts
+
+        enhanced: list[dict] = []
+        for f in file_dicts[:15]:  # max 15 full-content fetches per review
+            filename = f.get("filename", "")
+            language = detect_language(filename)
+            full_content = None
+
+            try:
+                full_content = await fetch_full_content(client, owner, repo, filename, ref)
+            except Exception as exc:
+                logger.debug("Full content fetch failed for %s: %s", filename, exc)
+
+            if full_content:
+                truncated = smart_truncate(full_content, 4000, language)
+                imports = parse_imports(full_content, language)
+                f["full_content"] = truncated
+                f["language"] = language
+                f["imports"] = imports[:10]
+                f["had_full_content"] = True
+            else:
+                f["had_full_content"] = False
+
+            enhanced.append(f)
+
+        return enhanced

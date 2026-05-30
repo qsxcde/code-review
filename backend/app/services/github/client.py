@@ -49,6 +49,22 @@ class GitHubAPIClient:
             )
         return data
 
+    async def get_file_content(self, owner: str, repo: str, path: str, ref: str) -> str | None:
+        """Fetch raw file content from GitHub Contents API. Returns None on failure."""
+        import base64
+
+        try:
+            data = await self.get_json(
+                f"/repos/{owner}/{repo}/contents/{path}",
+                params={"ref": ref},
+            )
+            content = data.get("content", "")
+            if not content:
+                return None
+            return base64.b64decode(content).decode("utf-8")
+        except Exception:
+            return None
+
     async def get_paginated_json(self, path: str) -> list[dict[str, Any]]:
         page = 1
         items: list[dict[str, Any]] = []
