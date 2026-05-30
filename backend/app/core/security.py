@@ -1,23 +1,15 @@
-from secrets import compare_digest
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import ExpiredSignatureError, InvalidTokenError
 
-from app.core.config import Settings, get_settings
+from app.services.auth.jwt import ACCESS_TYPE, decode_token
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def require_api_token(
+async def require_jwt_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    settings: Settings = Depends(get_settings),
-) -> None:
-    if not settings.review_api_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="REVIEW_API_TOKEN is not configured",
-        )
-
+) -> int:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -25,9 +17,20 @@ def require_api_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not compare_digest(credentials.credentials, settings.review_api_token):
+    token = credentials.credentials
+    try:
+        payload = decode_token(token, expected_type=ACCESS_TYPE)
+    except ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
+    return int(payload["sub"])

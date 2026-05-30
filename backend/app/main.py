@@ -32,9 +32,27 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
+    @app.on_event("startup")
+    async def startup_services() -> None:
+        from app.core.redis import get_redis
+
+        await get_redis()
+
     @app.on_event("shutdown")
-    async def close_http_clients() -> None:
+    async def shutdown_services() -> None:
+        import asyncio
+
+        from app.core.redis import close_redis
+
         await close_github_pr_services()
+        await close_redis()
+
+        try:
+            from app.core.db import engine
+
+            await engine.dispose()
+        except Exception:
+            pass
 
     @app.middleware("http")
     async def log_requests(request, call_next):

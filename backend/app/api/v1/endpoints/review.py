@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.agents.review import ReviewGraphRunner
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import require_rate_limit
-from app.core.security import require_api_token
+from app.core.security import require_jwt_user
 from app.schemas.review import (
     MockReviewRequest,
     ReviewAnalyzeRequest,
@@ -16,7 +16,7 @@ from app.services.llm import LLMReviewService
 router = APIRouter(
     prefix="/review",
     tags=["review"],
-    dependencies=[Depends(require_api_token), Depends(require_rate_limit)],
+    dependencies=[Depends(require_jwt_user), Depends(require_rate_limit)],
 )
 
 

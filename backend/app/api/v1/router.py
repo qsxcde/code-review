@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import github, health, review
+from app.api.v1.endpoints import auth, github, health, review
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(github.router)
 api_router.include_router(review.router)
+api_router.include_router(auth.router)

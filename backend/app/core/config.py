@@ -29,6 +29,24 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None, validation_alias="OPENAI_BASE_URL")
     openai_model: str | None = Field(default=None, validation_alias="OPENAI_MODEL")
 
+    database_url: str = Field(
+        default="mysql+aiomysql://root:@localhost:3306/code_review",
+        validation_alias="DATABASE_URL",
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        validation_alias="REDIS_URL",
+    )
+    jwt_secret: str = Field(default="", validation_alias="JWT_SECRET")
+    jwt_access_token_expire_minutes: int = Field(
+        default=15,
+        validation_alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES",
+    )
+    jwt_refresh_token_expire_days: int = Field(
+        default=30,
+        validation_alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS",
+    )
+
     @field_validator("port", mode="before")
     @classmethod
     def default_port_when_empty(cls, value: object) -> object:
@@ -57,6 +75,13 @@ class Settings(BaseSettings):
     @classmethod
     def empty_string_to_none(cls, value: object) -> object:
         return None if value == "" else value
+
+    @field_validator("jwt_secret", mode="after")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        if len(value) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters")
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env",
