@@ -1,3 +1,5 @@
+@use "./styles/print";
+
 :root {
   font-family:
     "PingFang SC",
@@ -35,4 +37,3 @@ a {
   text-decoration: none;
 }
 
-@use "print";
