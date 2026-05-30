@@ -7,7 +7,7 @@ import {
   Document,
   Setting,
 } from "@element-plus/icons-vue";
-import type { NavItem, PullRequestInfo, SummaryItem, RiskFile, ChangedFile, AiSuggestion, Issue, RiskLevel } from "./types/review";
+import type { NavItem, PullRequestInfo, SummaryItem, RiskFile, ChangedFile, AiSuggestion, Issue, RiskLevel, RiskStats } from "./types/review";
 import { normalizeGitHubPrUrl, mapAnalyzeResponse, analyzePR } from "./api/reviewApi";
 import AppSidebar from "./components/AppSidebar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
@@ -59,12 +59,19 @@ const summaryItems = ref<SummaryItem[]>([
 ]);
 
 const riskFiles = ref<RiskFile[]>([
-  { path: "service/payment_service.py", count: 6 },
-  { path: "controller/order_controller.java", count: 4 },
-  { path: "repository/order_repository.py", count: 2 },
+  { path: "service/payment_service.py", count: 6, high: 3, medium: 2, low: 1 },
+  { path: "controller/order_controller.java", count: 4, high: 2, medium: 2, low: 0 },
+  { path: "repository/order_repository.py", count: 2, high: 1, medium: 1, low: 0 },
 ]);
 
-const changedFiles: ChangedFile[] = [
+const riskStats = ref<RiskStats>({
+  high: 6,
+  medium: 5,
+  low: 1,
+  total: 12,
+});
+
+const changedFiles = ref<ChangedFile[]>([
   { folder: "service", name: "payment_service.py", alerts: 6, active: true },
   { folder: "service", name: "order_service.py", alerts: 3 },
   { folder: "controller", name: "order_controller.java", alerts: 4 },
@@ -72,7 +79,7 @@ const changedFiles: ChangedFile[] = [
   { folder: "repository", name: "order_repository.py", alerts: 2 },
   { folder: "test", name: "test_payment_retry.py", alerts: 1 },
   { folder: "test", name: "test_order_service.py", alerts: 1 },
-];
+]);
 
 const codeLines = [
   { line: 118, mark: " ", code: "@@ -118,15 +118,18 @@ def handle_payment_callback(self, request):" },
@@ -113,7 +120,6 @@ const topIssues = ref<Issue[]>([
   { title: "权限校验可能缺失", file: "payment_controller.py:88", level: "medium" },
 ]);
 
-const riskTotal = computed(() => riskFiles.value.reduce((total, file) => total + file.count, 0));
 const summaryTags = computed(() => ["全部", ...Array.from(new Set(summaryItems.value.map((item) => item.tag)))]);
 const filteredSummaryItems = computed(() => {
   if (activeSummaryTag.value === "全部") return summaryItems.value;
@@ -159,7 +165,13 @@ const handleAnalyze = async () => {
     pullRequest.value = { ...pullRequest.value, ...mapped.pullRequest } as PullRequestInfo;
     summaryItems.value = mapped.summaryItems;
     riskFiles.value = mapped.riskFiles;
-    if (mapped.riskFiles[0]) selectedRiskPath.value = mapped.riskFiles[0].path;
+    riskStats.value = mapped.riskStats;
+    changedFiles.value = mapped.changedFiles;
+    if (mapped.riskFiles[0]) {
+      selectedRiskPath.value = mapped.riskFiles[0].path;
+    } else {
+      selectedRiskPath.value = "";
+    }
     topIssues.value = mapped.topIssues;
     aiSuggestions.value = mapped.aiSuggestions;
     activeSummaryTag.value = "全部";
@@ -208,7 +220,7 @@ const handleAnalyze = async () => {
           />
           <RiskCard
             :risk-files="riskFiles"
-            :risk-total="riskTotal"
+            :risk-stats="riskStats"
             :selected-risk-path="selectedRiskPath"
             @select-file="selectedRiskPath = $event"
           />
