@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SwitchButton, UserFilled } from "@element-plus/icons-vue";
-import type { AuthUser, NavItem } from "../types/review";
+import type { AuthUser } from "../types/auth";
+import type { NavItem } from "../types/navigation";
 
 defineProps<{
   navItems: NavItem[];

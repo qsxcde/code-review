@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { InsightCard } from "../types/review";
+import type { InsightCard } from "../types/ui";
 
 defineProps<{
   insightCards: InsightCard[];

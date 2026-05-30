@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
 import { Delete, Refresh, Search, View } from "@element-plus/icons-vue";
 import {
-  deleteReviewRecord,
-  fetchReviewRecordDetail,
-  fetchReviewRecords,
-  submitReviewFeedback,
-} from "../api/historyApi";
-import type { FeedbackRating, ReviewRecord, ReviewRecordDetail, RiskLevel } from "../types/review";
+  formatHistoryTime,
+  riskTotal,
+  statusLabel,
+  statusOptions,
+  useReviewHistory,
+} from "../composables/useReviewHistory";
+import HistoryDetailDrawer from "./history/HistoryDetailDrawer.vue";
 
 const props = defineProps<{
   apiBaseUrl: string;
@@ -19,127 +18,29 @@ const emit = defineEmits<{
   "require-login": [];
 }>();
 
-const records = ref<ReviewRecord[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(10);
-const statusFilter = ref("");
-const ownerFilter = ref("");
-const repoFilter = ref("");
-const loading = ref(false);
-const detailLoading = ref(false);
-const detailVisible = ref(false);
-const selectedRecord = ref<ReviewRecordDetail | null>(null);
-const feedbackState = ref<Record<string, FeedbackRating>>({});
-
-const statusOptions = [
-  { label: "全部状态", value: "" },
-  { label: "已完成", value: "completed" },
-  { label: "分析中", value: "pending" },
-  { label: "失败", value: "failed" },
-];
-
-const riskLabel: Record<RiskLevel, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
-};
-
-const statusLabel: Record<string, string> = {
-  completed: "已完成",
-  pending: "分析中",
-  failed: "失败",
-};
-
-const selectedRisks = computed(() => selectedRecord.value?.result_json?.analysis.risks || []);
-
-const formatTime = (value: string | null) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
-};
-
-const riskTotal = (record: ReviewRecord) => {
-  const counts = record.risk_counts || {};
-  return (counts.high || 0) + (counts.medium || 0) + (counts.low || 0);
-};
-
-const loadRecords = async () => {
-  if (!props.accessToken) {
-    emit("require-login");
-    return;
-  }
-
-  loading.value = true;
-  try {
-    const data = await fetchReviewRecords(props.apiBaseUrl, props.accessToken, {
-      page: page.value,
-      pageSize: pageSize.value,
-      status: statusFilter.value,
-      owner: ownerFilter.value.trim(),
-      repo: repoFilter.value.trim(),
-    });
-    records.value = data.items;
-    total.value = data.total;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "历史记录加载失败";
-    ElMessage.error(message);
-    if (message.includes("401") || message.includes("token")) emit("require-login");
-  } finally {
-    loading.value = false;
-  }
-};
-
-const resetFilters = () => {
-  statusFilter.value = "";
-  ownerFilter.value = "";
-  repoFilter.value = "";
-  page.value = 1;
-  void loadRecords();
-};
-
-const openDetail = async (record: ReviewRecord) => {
-  detailVisible.value = true;
-  detailLoading.value = true;
-  selectedRecord.value = null;
-
-  try {
-    selectedRecord.value = await fetchReviewRecordDetail(props.apiBaseUrl, props.accessToken, record.id);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "详情加载失败";
-    ElMessage.error(message);
-  } finally {
-    detailLoading.value = false;
-  }
-};
-
-const removeRecord = async (record: ReviewRecord) => {
-  await ElMessageBox.confirm("删除后无法恢复，确认删除这条评审历史吗？", "删除记录", {
-    confirmButtonText: "删除",
-    cancelButtonText: "取消",
-    type: "warning",
-  });
-
-  await deleteReviewRecord(props.apiBaseUrl, props.accessToken, record.id);
-  ElMessage.success("已删除");
-  await loadRecords();
-};
-
-const sendFeedback = async (riskIndex: number, rating: FeedbackRating) => {
-  if (!selectedRecord.value) return;
-
-  const key = `${selectedRecord.value.id}-${riskIndex}`;
-  await submitReviewFeedback(props.apiBaseUrl, props.accessToken, selectedRecord.value.id, riskIndex, rating);
-  feedbackState.value[key] = rating;
-  ElMessage.success("反馈已提交");
-};
-
-watch([page, pageSize], () => {
-  void loadRecords();
-});
-
-onMounted(() => {
-  void loadRecords();
-});
+const {
+  records,
+  total,
+  page,
+  pageSize,
+  statusFilter,
+  ownerFilter,
+  repoFilter,
+  loading,
+  detailLoading,
+  detailVisible,
+  selectedRecord,
+  feedbackState,
+  loadRecords,
+  resetFilters,
+  openDetail,
+  removeRecord,
+  sendFeedback,
+} = useReviewHistory(
+  () => props.apiBaseUrl,
+  () => props.accessToken,
+  () => emit("require-login"),
+);
 </script>
 
 <template>
@@ -199,7 +100,7 @@ onMounted(() => {
           <template #default="{ row }">{{ row.duration_ms ? `${(row.duration_ms / 1000).toFixed(1)}s` : "-" }}</template>
         </el-table-column>
         <el-table-column label="创建时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          <template #default="{ row }">{{ formatHistoryTime(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
@@ -220,42 +121,13 @@ onMounted(() => {
       />
     </footer>
 
-    <el-drawer v-model="detailVisible" title="评审详情" size="46%">
-      <div v-loading="detailLoading" class="record-detail">
-        <template v-if="selectedRecord">
-          <section class="detail-summary">
-            <h3>{{ selectedRecord.pr_title || "未命名 PR" }}</h3>
-            <p>{{ selectedRecord.result_json?.analysis.summary.overview || "暂无总结" }}</p>
-            <div>
-              <el-tag>{{ selectedRecord.owner }}/{{ selectedRecord.repo }}</el-tag>
-              <el-tag type="success">{{ selectedRecord.file_count }} 个文件</el-tag>
-              <el-tag type="warning">{{ riskTotal(selectedRecord) }} 个风险</el-tag>
-            </div>
-          </section>
-
-          <section class="detail-risks">
-            <h4>AI 建议反馈</h4>
-            <article v-for="(risk, index) in selectedRisks" :key="`${risk.file}-${index}`" class="risk-item">
-              <div class="risk-head">
-                <el-tag :type="risk.severity === 'high' ? 'danger' : risk.severity === 'medium' ? 'warning' : 'success'">
-                  {{ riskLabel[risk.severity] }}
-                </el-tag>
-                <span>{{ risk.file }}{{ risk.line ? `:${risk.line}` : "" }}</span>
-              </div>
-              <strong>{{ risk.issue }}</strong>
-              <p>{{ risk.suggestion }}</p>
-              <div class="feedback-actions">
-                <el-button size="small" @click="sendFeedback(index, 'helpful')">有用</el-button>
-                <el-button size="small" @click="sendFeedback(index, 'not_helpful')">无用</el-button>
-                <el-button size="small" @click="sendFeedback(index, 'false_positive')">误报</el-button>
-                <em v-if="feedbackState[`${selectedRecord.id}-${index}`]">已反馈</em>
-              </div>
-            </article>
-            <p v-if="selectedRisks.length === 0" class="empty-detail">暂无可反馈的风险建议</p>
-          </section>
-        </template>
-      </div>
-    </el-drawer>
+    <HistoryDetailDrawer
+      v-model:visible="detailVisible"
+      :loading="detailLoading"
+      :record="selectedRecord"
+      :feedback-state="feedbackState"
+      @feedback="sendFeedback"
+    />
   </section>
 </template>
 
@@ -370,94 +242,6 @@ onMounted(() => {
   .high { color: $danger; }
   .medium { color: $warning; }
   .low { color: $primary; }
-}
-
-.record-detail {
-  min-height: 240px;
-}
-
-.detail-summary {
-  display: grid;
-  gap: 10px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid $line;
-
-  h3,
-  p {
-    margin: 0;
-  }
-
-  h3 {
-    color: $text;
-    font-size: 18px;
-  }
-
-  p {
-    color: $muted;
-    line-height: 1.7;
-  }
-
-  div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-}
-
-.detail-risks {
-  display: grid;
-  gap: 12px;
-  padding-top: 18px;
-
-  h4 {
-    margin: 0;
-    color: $text;
-    font-size: 15px;
-  }
-}
-
-.risk-item {
-  display: grid;
-  gap: 9px;
-  padding: 14px;
-  border: 1px solid $line;
-  border-radius: 10px;
-  background: #fbfdff;
-
-  strong,
-  p {
-    margin: 0;
-  }
-
-  strong {
-    color: $text;
-    font-size: 14px;
-  }
-
-  p {
-    color: $muted;
-    line-height: 1.65;
-  }
-}
-
-.risk-head,
-.feedback-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.risk-head span,
-.feedback-actions em {
-  color: $soft;
-  font-size: 12px;
-  font-style: normal;
-}
-
-.empty-detail {
-  margin: 0;
-  color: $soft;
-  font-size: 13px;
 }
 
 @media (max-width: 1180px) {

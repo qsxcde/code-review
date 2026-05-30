@@ -2,78 +2,35 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import {
-  Lock,
   Clock,
   DataAnalysis,
   Document,
+  Lock,
   Message,
   Setting,
 } from "@element-plus/icons-vue";
-import type {
-  NavItem,
-  PullRequestInfo,
-  SummaryItem,
-  RiskFile,
-  ChangedFile,
-  AiSuggestion,
-  Issue,
-  RiskLevel,
-  RiskStats,
-  AiSummaryStats,
-  CodeLine,
-  GitHubPRFile,
-  AuthSession,
-  ReviewAnalyzeResponse,
-} from "./types/review";
-import {
-  normalizeGitHubPrUrl,
-  mapAnalyzeResponse,
-  analyzePR,
-  fetchGitHubPR,
-  mapGitHubFiles,
-  mapGitHubPRToPullRequest,
-  parsePatchToCodeLines,
-} from "./api/reviewApi";
-import {
-  clearAuthSession,
-  loadAuthSession,
-  login,
-  logout,
-  register,
-  saveAuthSession,
-} from "./api/authApi";
+import { useAuth } from "./composables/useAuth";
+import type { ActiveView, NavItem } from "./types/navigation";
 import AppSidebar from "./components/AppSidebar.vue";
-import SearchPanel from "./components/SearchPanel.vue";
-import PRInfoCard from "./components/PRInfoCard.vue";
-import SummaryCard from "./components/SummaryCard.vue";
-import RiskCard from "./components/RiskCard.vue";
-import DiffViewer from "./components/DiffViewer.vue";
-import AISummaryPanel from "./components/AISummaryPanel.vue";
 import HistoryView from "./components/HistoryView.vue";
+import AnalysisView from "./views/AnalysisView.vue";
 
-type AppView = NavItem["key"];
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const activeView = ref<ActiveView>("analysis");
 
-const prUrl = ref("https://github.com/octocat/Hello-World/pull/6");
-const isAnalyzing = ref(false);
-const analysisStatus = ref<"idle" | "analyzing" | "completed" | "failed">("completed");
-const analysisDuration = ref(1.8);
-const analyzedUrl = ref(prUrl.value);
-const activeSummaryTag = ref("全部");
-const selectedRiskPath = ref("service/payment_service.py");
-const backendWarning = ref("");
-const errorMessage = ref("");
-const selectedCodePath = ref("service/payment_service.py");
-const prFiles = ref<GitHubPRFile[]>([]);
-const authSession = ref<AuthSession | null>(loadAuthSession());
-const authDialogVisible = ref(false);
-const authMode = ref<"login" | "register">("login");
-const authEmail = ref("");
-const authPassword = ref("");
-const authLoading = ref(false);
-const activeView = ref<AppView>("analysis");
-const currentAnalysis = ref<ReviewAnalyzeResponse | null>(null);
-const reportDialogVisible = ref(false);
-const reportMarkdown = ref("");
+const {
+  authSession,
+  authDialogVisible,
+  authMode,
+  authEmail,
+  authPassword,
+  authLoading,
+  currentAccessToken,
+  openAuthDialog,
+  handleAuthSubmit,
+  handleLogout,
+  expireSession,
+} = useAuth(apiBaseUrl);
 
 const navItems = computed<NavItem[]>(() => [
   { key: "analysis", label: "PR 分析", icon: DataAnalysis, active: activeView.value === "analysis" },
@@ -82,362 +39,18 @@ const navItems = computed<NavItem[]>(() => [
   { key: "settings", label: "设置中心", icon: Setting, active: activeView.value === "settings" },
 ]);
 
-const pullRequest = ref<PullRequestInfo>({
-  repository: "org/ecommerce-platform",
-  visibility: "公开仓库",
-  title: "feat: 支付回调重试机制与订单状态流转重构",
-  description: "实现支付回调失败重试机制，优化订单状态流转逻辑，提升系统稳定性。",
-  author: "李明",
-  sourceBranch: "feature/payment-retry",
-  targetBranch: "develop",
-  createdAt: "2026-05-20 14:32",
-  updatedAt: "2026-05-21 09:15",
-  state: "Open",
-  changedFiles: 18,
-  additions: 523,
-  deletions: 312,
-});
-
-const summaryItems = ref<SummaryItem[]>([
-  { text: "新增支付回调重试机制，支持最多 3 次重试", tag: "新增功能", tone: "green" },
-  { text: "重构订单状态流转逻辑，引入新的状态更新方法", tag: "重构", tone: "blue" },
-  { text: "修改 payment_service.py 的支付成功回调处理流程", tag: "重构", tone: "blue" },
-  { text: "补充订单不存在时的异常处理逻辑", tag: "优化", tone: "orange" },
-  { text: "新增相关单元测试覆盖重试和回调失败场景", tag: "测试", tone: "violet" },
-]);
-
-const riskFiles = ref<RiskFile[]>([
-  { path: "service/payment_service.py", count: 6, high: 3, medium: 2, low: 1 },
-  { path: "controller/order_controller.java", count: 4, high: 2, medium: 2, low: 0 },
-  { path: "repository/order_repository.py", count: 2, high: 1, medium: 1, low: 0 },
-]);
-
-const riskStats = ref<RiskStats>({
-  high: 6,
-  medium: 5,
-  low: 1,
-  total: 12,
-});
-
-const aiSummaryStats = ref<AiSummaryStats>({
-  riskLevel: "高风险",
-  riskTone: "high",
-  riskIssues: 12,
-  involvedFiles: 3,
-  mergeAdvice: "建议修复后合并",
-});
-
-const changedFiles = ref<ChangedFile[]>([
-  { path: "service/payment_service.py", folder: "service", name: "payment_service.py", alerts: 6, active: true },
-  { path: "service/order_service.py", folder: "service", name: "order_service.py", alerts: 3 },
-  { path: "controller/order_controller.java", folder: "controller", name: "order_controller.java", alerts: 4 },
-  { path: "controller/payment_controller.py", folder: "controller", name: "payment_controller.py", alerts: 2 },
-  { path: "repository/order_repository.py", folder: "repository", name: "order_repository.py", alerts: 2 },
-  { path: "test/test_payment_retry.py", folder: "test", name: "test_payment_retry.py", alerts: 1 },
-  { path: "test/test_order_service.py", folder: "test", name: "test_order_service.py", alerts: 1 },
-]);
-
-const codeLines = ref<CodeLine[]>([
-  { line: 118, mark: " ", code: "@@ -118,15 +118,18 @@ def handle_payment_callback(self, request):" },
-  { line: 119, mark: " ", code: "# 验证回调签名" },
-  { line: 120, mark: " ", code: "if not self._verify_signature(request):" },
-  { line: 121, mark: " ", code: "    return self._error_response(\"invalid signature\")" },
-  { line: 122, mark: "-", code: "order_id = request.json[\"order_id\"]" },
-  { line: 123, mark: "-", code: "payment_id = request.json[\"payment_id\"]" },
-  { line: 124, mark: "-", code: "amount = request.json[\"amount\"]" },
-  { line: 126, mark: "+", code: "order_id = request.json.get(\"order_id\")" },
-  { line: 127, mark: "+", code: "payment_id = request.json.get(\"payment_id\")" },
-  { line: 128, mark: "+", code: "amount = request.json.get(\"amount\")" },
-  { line: 130, mark: "+", code: "if not order_id or not payment_id:" },
-  { line: 131, mark: "+", code: "    return self._error_response(\"missing required parameters\")" },
-  { line: 134, mark: " ", code: "order = self.order_service.get_order(order_id)" },
-  { line: 135, mark: " ", code: "if not order:" },
-  { line: 136, mark: " ", code: "    return self._error_response(\"order not found\")" },
-]);
-
-const aiSuggestions = ref<AiSuggestion[]>([
-  {
-    level: "高风险",
-    title: "参数获取可能导致 KeyError 异常",
-    line: "第122-124行",
-    description: "直接读取 request.json 字段会在参数缺失时抛异常，建议统一使用 get 并增加必要性校验。",
-  },
-  {
-    level: "中风险",
-    title: "金额参数校验可以更完善",
-    line: "第128-129行",
-    description: "当前仅做非空校验，建议补充数值格式、精度和币种一致性检查。",
-  },
-]);
-
-const topIssues = ref<Issue[]>([
-  { title: "支付回调可能重复提交", file: "payment_service.py:128", level: "high" },
-  { title: "订单状态并发更新风险", file: "order_controller.java:276", level: "high" },
-  { title: "权限校验可能缺失", file: "payment_controller.py:88", level: "medium" },
-]);
-
-const summaryTags = computed(() => ["全部", ...Array.from(new Set(summaryItems.value.map((item) => item.tag)))]);
-const filteredSummaryItems = computed(() => {
-  if (activeSummaryTag.value === "全部") return summaryItems.value;
-  return summaryItems.value.filter((item) => item.tag === activeSummaryTag.value);
-});
-
-const selectedFileSuggestions = computed(() => {
-  const matched = aiSuggestions.value.filter((suggestion) => suggestion.line === selectedCodePath.value);
-  return matched.length > 0 ? matched : aiSuggestions.value;
-});
-
-const analysisStatusText = computed(() => {
-  if (analysisStatus.value === "analyzing") return "正在获取 PR 变更并进行 AI 分析...";
-  if (analysisStatus.value === "failed") return errorMessage.value || "分析失败，请稍后重试";
-  return "分析完成";
-});
-
-const riskLabel: Record<RiskLevel, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
+const requireLogin = () => {
+  openAuthDialog("login");
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-const currentAccessToken = computed(() => authSession.value?.access_token || "");
-
-const openAuthDialog = (mode: "login" | "register") => {
-  authMode.value = mode;
-  authDialogVisible.value = true;
-  errorMessage.value = "";
-};
-
-const handleAuthSubmit = async () => {
-  if (!authEmail.value || !authPassword.value) {
-    ElMessage.warning("请输入邮箱和密码");
-    return;
-  }
-
-  authLoading.value = true;
-  try {
-    const nextSession = authMode.value === "login"
-      ? await login(apiBaseUrl, authEmail.value, authPassword.value)
-      : await register(apiBaseUrl, authEmail.value, authPassword.value);
-
-    authSession.value = nextSession;
-    saveAuthSession(nextSession);
-    authDialogVisible.value = false;
-    authPassword.value = "";
-    ElMessage.success(authMode.value === "login" ? "登录成功" : "注册成功");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "认证失败";
-    ElMessage.error(message);
-  } finally {
-    authLoading.value = false;
-  }
-};
-
-const handleLogout = async () => {
-  const session = authSession.value;
-  authSession.value = null;
-  clearAuthSession();
-
-  if (!session) return;
-
-  try {
-    await logout(apiBaseUrl, session.access_token, session.refresh_token);
-    ElMessage.success("已登出");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "登出失败";
-    ElMessage.warning(message);
-  }
-};
-
-const handleSelectView = (view: AppView) => {
+const handleSelectView = (view: ActiveView) => {
   if (view === "history" && !currentAccessToken.value) {
-    openAuthDialog("login");
+    requireLogin();
     ElMessage.warning("请先登录后查看历史分析");
     return;
   }
 
   activeView.value = view;
-};
-
-const updateSelectedCodeFile = (path: string) => {
-  selectedCodePath.value = path;
-  changedFiles.value = changedFiles.value.map((file) => ({
-    ...file,
-    active: file.path === path,
-  }));
-
-  const file = prFiles.value.find((item) => item.filename === path);
-  const parsedLines = parsePatchToCodeLines(file?.patch);
-  codeLines.value = parsedLines.length > 0
-    ? parsedLines
-    : [{ line: 1, mark: " ", code: file ? "该文件没有可展示的 patch 内容" : "暂无代码变更内容" }];
-};
-
-const severityText: Record<RiskLevel, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
-};
-
-const buildReviewReportMarkdown = () => {
-  const data = currentAnalysis.value;
-  const summary = data?.analysis.summary;
-  const risks = data?.analysis.risks || [];
-  const suggestions = data?.analysis.suggestions || [];
-  const metrics = data?.analysis.metrics;
-  const pr = data?.pr;
-
-  const lines = [
-    `# ${pr?.title || pullRequest.value.title}`,
-    "",
-    "## PR 信息",
-    `- 仓库：${pr ? `${pr.owner}/${pr.repo}` : pullRequest.value.repository}`,
-    `- PR：${pr?.url || analyzedUrl.value}`,
-    `- 作者：${pr?.author || pullRequest.value.author}`,
-    `- 分支：${pr?.headBranch || pullRequest.value.sourceBranch} -> ${pr?.baseBranch || pullRequest.value.targetBranch}`,
-    `- 变更：${pr?.changedFiles ?? pullRequest.value.changedFiles} 个文件，+${pr?.additions ?? pullRequest.value.additions} / -${pr?.deletions ?? pullRequest.value.deletions}`,
-    "",
-    "## 总结",
-    summary?.overview || pullRequest.value.description,
-    "",
-    "## 风险统计",
-    `- 高风险：${metrics?.highRiskCount ?? riskStats.value.high}`,
-    `- 中风险：${metrics?.mediumRiskCount ?? riskStats.value.medium}`,
-    `- 低风险：${metrics?.lowRiskCount ?? riskStats.value.low}`,
-    "",
-    "## 变更模块",
-    ...(summary?.changedModules?.length
-      ? summary.changedModules.map((module) => `- ${module}`)
-      : summaryItems.value.map((item) => `- ${item.text}`)),
-    "",
-    "## 风险问题",
-    ...(risks.length
-      ? risks.map((risk, index) => [
-          `### ${index + 1}. ${risk.issue}`,
-          `- 级别：${severityText[risk.severity]}`,
-          `- 位置：${risk.file}${risk.line ? `:${risk.line}` : ""}`,
-          `- 影响：${risk.impact}`,
-          `- 建议：${risk.suggestion}`,
-        ].join("\n"))
-      : topIssues.value.map((issue, index) => `### ${index + 1}. ${issue.title}\n- 级别：${severityText[issue.level]}\n- 位置：${issue.file}`)),
-    "",
-    "## Review 建议",
-    ...(suggestions.length
-      ? suggestions.map((suggestion, index) => `${index + 1}. [${suggestion.type}] ${suggestion.file}：${suggestion.comment}`)
-      : aiSuggestions.value.map((suggestion, index) => `${index + 1}. ${suggestion.title}：${suggestion.description}`)),
-    "",
-  ];
-
-  return lines.join("\n");
-};
-
-const reportFileName = () => {
-  const repo = (currentAnalysis.value?.pr.repo || pullRequest.value.repository || "review")
-    .replace(/[^\w.-]+/g, "-");
-  const number = currentAnalysis.value?.pr.number ? `-${currentAnalysis.value.pr.number}` : "";
-  return `${repo}${number}-review-report.md`;
-};
-
-const downloadTextFile = (content: string, fileName: string) => {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-};
-
-const handleGenerateReport = () => {
-  reportMarkdown.value = buildReviewReportMarkdown();
-  reportDialogVisible.value = true;
-};
-
-const handleExportResult = () => {
-  const markdown = buildReviewReportMarkdown();
-  downloadTextFile(markdown, reportFileName());
-  ElMessage.success("分析结果已导出");
-};
-
-const copyReport = async () => {
-  await navigator.clipboard.writeText(reportMarkdown.value);
-  ElMessage.success("报告已复制");
-};
-
-const handleAnalyze = async () => {
-  const nextUrl = normalizeGitHubPrUrl(prUrl.value);
-
-  if (!nextUrl) {
-    errorMessage.value = "请输入正确的 GitHub Pull Request 链接";
-    analysisStatus.value = "failed";
-    ElMessage.warning(errorMessage.value);
-    return;
-  }
-
-  if (!currentAccessToken.value) {
-    openAuthDialog("login");
-    ElMessage.warning("请先登录后再开始分析");
-    return;
-  }
-
-  isAnalyzing.value = true;
-  analysisStatus.value = "analyzing";
-  errorMessage.value = "";
-  analyzedUrl.value = nextUrl;
-  prUrl.value = nextUrl;
-  backendWarning.value = "";
-
-  try {
-    const [data, githubPR] = await Promise.all([
-      analyzePR(nextUrl, apiBaseUrl, currentAccessToken.value),
-      fetchGitHubPR(nextUrl, apiBaseUrl, currentAccessToken.value),
-    ]);
-    const mapped = mapAnalyzeResponse(data);
-
-    currentAnalysis.value = data;
-    prFiles.value = githubPR.files;
-    pullRequest.value = {
-      ...pullRequest.value,
-      ...mapGitHubPRToPullRequest(githubPR),
-      ...mapped.pullRequest,
-    } as PullRequestInfo;
-    summaryItems.value = mapped.summaryItems;
-    riskFiles.value = mapped.riskFiles;
-    riskStats.value = mapped.riskStats;
-    aiSummaryStats.value = mapped.summaryStats;
-    topIssues.value = mapped.topIssues;
-    aiSuggestions.value = mapped.aiSuggestions;
-
-    const firstRiskPath = mapped.riskFiles[0]?.path || "";
-    const nextSelectedCodePath =
-      githubPR.files.find((file) => file.filename === firstRiskPath)?.filename ||
-      githubPR.files[0]?.filename ||
-      firstRiskPath;
-
-    selectedRiskPath.value = firstRiskPath;
-    changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
-    updateSelectedCodeFile(nextSelectedCodePath);
-
-    activeSummaryTag.value = "全部";
-    backendWarning.value = mapped.warnings;
-    analysisDuration.value = data.durationMs / 1000;
-    analysisStatus.value = "completed";
-    ElMessage.success("后端分析完成");
-  } catch (error) {
-    analysisStatus.value = "failed";
-    const message = error instanceof Error ? error.message : "后端请求失败";
-    errorMessage.value = `分析失败：${message}`;
-    if (message.includes("401") || message.includes("Authentication") || message.includes("token")) {
-      authSession.value = null;
-      clearAuthSession();
-      openAuthDialog("login");
-    }
-    ElMessage.error(errorMessage.value);
-  } finally {
-    isAnalyzing.value = false;
-  }
 };
 </script>
 
@@ -452,64 +65,19 @@ const handleAnalyze = async () => {
       @logout="handleLogout"
     />
 
-    <main v-if="activeView === 'analysis'" class="workspace">
-      <section class="hero-row">
-        <SearchPanel
-          :pr-url="prUrl"
-          :is-analyzing="isAnalyzing"
-          :analysis-status="analysisStatus"
-          :analysis-status-text="analysisStatusText"
-          :analysis-duration="analysisDuration"
-          :analyzed-url="analyzedUrl"
-          :backend-warning="backendWarning"
-          @analyze="handleAnalyze"
-          @update:pr-url="prUrl = $event"
-        />
-        <PRInfoCard :pull-request="pullRequest" />
-      </section>
-
-      <section class="dashboard-grid">
-        <div class="left-column">
-          <SummaryCard
-            :summary-items="filteredSummaryItems"
-            :summary-tags="summaryTags"
-            :active-summary-tag="activeSummaryTag"
-            @filter="activeSummaryTag = $event"
-          />
-          <RiskCard
-            :risk-files="riskFiles"
-            :risk-stats="riskStats"
-            :selected-risk-path="selectedRiskPath"
-          />
-        </div>
-
-        <div class="center-column">
-          <DiffViewer
-            :code-lines="codeLines"
-            :changed-files="changedFiles"
-            :ai-suggestions="selectedFileSuggestions"
-            :selected-file-path="selectedCodePath"
-            @select-file="updateSelectedCodeFile"
-          />
-        </div>
-
-        <aside class="right-column">
-          <AISummaryPanel
-            :summary-stats="aiSummaryStats"
-            :top-issues="topIssues"
-            :risk-label="riskLabel"
-            @generate-report="handleGenerateReport"
-            @export-result="handleExportResult"
-          />
-        </aside>
-      </section>
-    </main>
+    <AnalysisView
+      v-if="activeView === 'analysis'"
+      :api-base-url="apiBaseUrl"
+      :access-token="currentAccessToken"
+      @require-login="requireLogin"
+      @expire-session="expireSession"
+    />
 
     <main v-else-if="activeView === 'history'" class="workspace">
       <HistoryView
         :api-base-url="apiBaseUrl"
         :access-token="currentAccessToken"
-        @require-login="openAuthDialog('login')"
+        @require-login="requireLogin"
       />
     </main>
 
@@ -559,31 +127,10 @@ const handleAnalyze = async () => {
         </div>
       </template>
     </el-dialog>
-
-    <el-dialog
-      v-model="reportDialogVisible"
-      class="report-dialog"
-      title="完整 Review 报告"
-      width="680px"
-      append-to-body
-    >
-      <el-input
-        v-model="reportMarkdown"
-        type="textarea"
-        :rows="18"
-        resize="none"
-      />
-      <template #footer>
-        <div class="report-footer">
-          <el-button @click="copyReport">复制报告</el-button>
-          <el-button class="auth-primary" type="primary" @click="handleExportResult">导出 Markdown</el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 @use "./styles/variables" as *;
 
 .app-shell {
@@ -664,7 +211,7 @@ const handleAnalyze = async () => {
   }
 }
 
-:global(.auth-dialog .el-dialog__body) {
+.auth-dialog .el-dialog__body {
   padding-top: 8px;
 }
 
@@ -679,7 +226,7 @@ const handleAnalyze = async () => {
   background: $primary-gradient;
 }
 
-:global(.report-dialog .el-textarea__inner) {
+.report-dialog .el-textarea__inner {
   font-family: "SFMono-Regular", Consolas, monospace;
   line-height: 1.6;
 }
