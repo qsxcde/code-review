@@ -1,4 +1,16 @@
-import type { ReviewAnalyzeResponse, SummaryItem, AiSuggestion, RiskFile, Issue, PullRequestInfo, ChangedFile } from "../types/review";
+import type {
+  ReviewAnalyzeResponse,
+  SummaryItem,
+  AiSuggestion,
+  RiskFile,
+  Issue,
+  PullRequestInfo,
+  ChangedFile,
+  AiSummaryStats,
+  CodeLine,
+  GitHubPRResponse,
+  GitHubPRFile,
+} from "../types/review";
 
 export const normalizeGitHubPrUrl = (value: string): string | null => {
   try {
@@ -62,6 +74,17 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
       data.analysis.metrics.lowRiskCount,
   };
 
+  const riskTone: AiSummaryStats["riskTone"] =
+    riskStats.high > 0 ? "high" : riskStats.medium > 0 ? "medium" : "low";
+
+  const summaryStats: AiSummaryStats = {
+    riskLevel: riskTone === "high" ? "高风险" : riskTone === "medium" ? "中等风险" : "低风险",
+    riskTone,
+    riskIssues: riskStats.total,
+    involvedFiles: Object.keys(risksByFile).length || data.analysis.metrics.analyzedFileCount,
+    mergeAdvice: riskStats.high > 0 ? "建议修复后合并" : riskStats.medium > 0 ? "建议确认后合并" : "可合并",
+  };
+
   const pullRequest: Partial<PullRequestInfo> = {
     repository: `${data.pr.owner}/${data.pr.repo}`,
     title: data.pr.title,
@@ -123,6 +146,7 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
       const folder = parts.join("/") || "root";
 
       return {
+        path: file.path,
         folder,
         name,
         alerts: file.count,
@@ -148,11 +172,108 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
     summaryItems,
     riskFiles,
     riskStats,
+    summaryStats,
     changedFiles,
     topIssues,
     aiSuggestions,
     warnings: data.analysis.warnings.join("；"),
   };
+};
+
+export const parsePatchToCodeLines = (patch: string | null | undefined): CodeLine[] => {
+  if (!patch) return [];
+
+  const codeLines: CodeLine[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+
+  for (const rawLine of patch.split("\n")) {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$/.exec(rawLine);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      codeLines.push({
+        line: newLine,
+        mark: " ",
+        code: rawLine,
+      });
+      continue;
+    }
+
+    const mark = rawLine.startsWith("+") ? "+" : rawLine.startsWith("-") ? "-" : " ";
+    const code = rawLine.startsWith("+") || rawLine.startsWith("-") || rawLine.startsWith(" ")
+      ? rawLine.slice(1)
+      : rawLine;
+
+    if (mark === "+") {
+      codeLines.push({ line: newLine, mark, code });
+      newLine += 1;
+    } else if (mark === "-") {
+      codeLines.push({ line: oldLine, mark, code });
+      oldLine += 1;
+    } else {
+      codeLines.push({ line: newLine, mark, code });
+      oldLine += 1;
+      newLine += 1;
+    }
+  }
+
+  return codeLines;
+};
+
+export const mapGitHubFiles = (
+  files: GitHubPRFile[],
+  riskFiles: RiskFile[],
+  selectedPath: string,
+): ChangedFile[] => {
+  const riskCountByPath = riskFiles.reduce<Record<string, number>>((acc, file) => {
+    acc[file.path] = file.count;
+    return acc;
+  }, {});
+
+  return files.map((file) => {
+    const parts = file.filename.split("/");
+    const name = parts.pop() || file.filename;
+    const folder = parts.join("/") || "root";
+
+    return {
+      path: file.filename,
+      folder,
+      name,
+      alerts: riskCountByPath[file.filename] || 0,
+      active: file.filename === selectedPath,
+    };
+  });
+};
+
+export const mapGitHubPRToPullRequest = (data: GitHubPRResponse): Partial<PullRequestInfo> => ({
+  repository: `${data.owner}/${data.repo}`,
+  title: data.title,
+  description: data.body || "暂无 PR 描述",
+  author: data.author,
+  sourceBranch: data.head_branch,
+  targetBranch: data.base_branch,
+  state: data.state === "closed" ? "Closed" : "Open",
+  changedFiles: data.changed_files,
+  additions: data.additions,
+  deletions: data.deletions,
+});
+
+export const fetchGitHubPR = async (prUrl: string, apiBaseUrl: string, reviewApiToken: string) => {
+  const response = await fetch(`${apiBaseUrl}/github/pr`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(reviewApiToken ? { Authorization: `Bearer ${reviewApiToken}` } : {}),
+    },
+    body: JSON.stringify({ url: prUrl }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`获取 PR 代码变更失败：${response.status}`);
+  }
+
+  return (await response.json()) as GitHubPRResponse;
 };
 
 export const analyzePR = async (prUrl: string, apiBaseUrl: string, reviewApiToken: string) => {
