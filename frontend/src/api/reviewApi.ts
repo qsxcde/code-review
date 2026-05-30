@@ -1,4 +1,4 @@
-import type { ReviewAnalyzeResponse, SummaryItem, AiSuggestion, RiskFile, Issue, PullRequestInfo } from "../types/review";
+import type { ReviewAnalyzeResponse, SummaryItem, AiSuggestion, RiskFile, Issue, PullRequestInfo, ChangedFile } from "../types/review";
 
 export const normalizeGitHubPrUrl = (value: string): string | null => {
   try {
@@ -37,10 +37,30 @@ export const suggestionLevel = (type: "must_fix" | "should_fix" | "nice_to_have"
   type === "must_fix" ? "高风险" : "中风险";
 
 export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
-  const risksByFile = data.analysis.risks.reduce<Record<string, number>>((acc, risk) => {
-    acc[risk.file] = (acc[risk.file] || 0) + 1;
+  const risksByFile = data.analysis.risks.reduce<Record<string, RiskFile>>((acc, risk) => {
+    const file = acc[risk.file] || {
+      path: risk.file,
+      count: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+
+    file.count += 1;
+    file[risk.severity] += 1;
+    acc[risk.file] = file;
     return acc;
   }, {});
+
+  const riskStats = {
+    high: data.analysis.metrics.highRiskCount,
+    medium: data.analysis.metrics.mediumRiskCount,
+    low: data.analysis.metrics.lowRiskCount,
+    total:
+      data.analysis.metrics.highRiskCount +
+      data.analysis.metrics.mediumRiskCount +
+      data.analysis.metrics.lowRiskCount,
+  };
 
   const pullRequest: Partial<PullRequestInfo> = {
     repository: `${data.pr.owner}/${data.pr.repo}`,
@@ -91,10 +111,24 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
     }),
   ];
 
-  const riskFiles: RiskFile[] = Object.entries(risksByFile)
-    .map(([path, count]) => ({ path, count }))
+  const riskFiles: RiskFile[] = Object.values(risksByFile)
+    .sort((a, b) => b.high - a.high || b.count - a.count)
+    .slice(0, 3);
+
+  const changedFiles: ChangedFile[] = Object.values(risksByFile)
     .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    .map((file, index) => {
+      const parts = file.path.split("/");
+      const name = parts.pop() || file.path;
+      const folder = parts.join("/") || "root";
+
+      return {
+        folder,
+        name,
+        alerts: file.count,
+        active: index === 0,
+      };
+    });
 
   const topIssues: Issue[] = data.analysis.risks.slice(0, 3).map((risk) => ({
     title: risk.issue,
@@ -113,6 +147,8 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
     pullRequest,
     summaryItems,
     riskFiles,
+    riskStats,
+    changedFiles,
     topIssues,
     aiSuggestions,
     warnings: data.analysis.warnings.join("；"),

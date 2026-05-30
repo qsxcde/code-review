@@ -1,16 +1,39 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { WarningFilled } from "@element-plus/icons-vue";
-import type { RiskFile } from "../types/review";
+import type { RiskFile, RiskStats } from "../types/review";
 
-defineProps<{
+const props = defineProps<{
   riskFiles: RiskFile[];
-  riskTotal: number;
+  riskStats: RiskStats;
   selectedRiskPath: string;
 }>();
 
 const emit = defineEmits<{
   "select-file": [path: string];
 }>();
+
+const selectedRiskFile = computed(() =>
+  props.riskFiles.find((file) => file.path === props.selectedRiskPath),
+);
+
+const donutStyle = computed(() => {
+  if (props.riskStats.total <= 0) {
+    return {
+      background:
+        "radial-gradient(circle, #fff 0 52%, transparent 53%), conic-gradient(#e5e7eb 0 100%)",
+    };
+  }
+
+  const high = (props.riskStats.high / props.riskStats.total) * 100;
+  const medium = high + (props.riskStats.medium / props.riskStats.total) * 100;
+
+  return {
+    background:
+      `radial-gradient(circle, #fff 0 52%, transparent 53%), ` +
+      `conic-gradient(#ef4444 0 ${high}%, #f59e0b ${high}% ${medium}%, #315efb ${medium}% 100%)`,
+  };
+});
 </script>
 
 <template>
@@ -18,18 +41,21 @@ const emit = defineEmits<{
     <h3>风险代码识别</h3>
     <div class="risk-focus">
       <el-icon><WarningFilled /></el-icon>
-      <span>当前关注：{{ riskFiles.find((f) => f.path === selectedRiskPath)?.path || selectedRiskPath }}，{{ riskFiles.find((f) => f.path === selectedRiskPath)?.count || 0 }} 个风险点</span>
+      <span>
+        当前关注：{{ selectedRiskFile?.path || selectedRiskPath || "暂无高风险文件" }}，{{ selectedRiskFile?.count || 0 }} 个风险点
+      </span>
     </div>
-    <div class="donut">
-      <strong>{{ riskTotal }}</strong>
+    <div class="donut" :style="donutStyle">
+      <strong>{{ riskStats.total }}</strong>
       <span>总风险问题</span>
     </div>
     <div class="risk-legend">
-      <span><i class="high" />高风险 12</span>
-      <span><i class="medium" />中风险 20</span>
-      <span><i class="low" />低风险 15</span>
+      <span><i class="high" />高风险 {{ riskStats.high }}</span>
+      <span><i class="medium" />中风险 {{ riskStats.medium }}</span>
+      <span><i class="low" />低风险 {{ riskStats.low }}</span>
     </div>
     <h4>高风险文件 TOP 3</h4>
+    <p v-if="riskFiles.length === 0" class="empty-risk">暂无高风险文件</p>
     <button
       v-for="file in riskFiles"
       :key="file.path"
@@ -115,6 +141,12 @@ h4 { font-size: 13px; font-weight: 800; }
     color: $soft;
     font-size: 11px;
   }
+}
+
+.empty-risk {
+  margin: 0;
+  color: $soft;
+  font-size: 12px;
 }
 
 .risk-legend {

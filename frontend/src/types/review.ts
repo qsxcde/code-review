@@ -33,6 +33,16 @@ export interface SummaryItem {
 export interface RiskFile {
   path: string;
   count: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface RiskStats {
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
 }
 
 export interface ChangedFile {
