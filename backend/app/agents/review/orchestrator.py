@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Callable
 
 from app.agents.review.aggregator import detect_conflicts, merge_results
 from app.agents.review.context import ReviewContextBuilder
@@ -138,6 +139,7 @@ async def _run_multi_agent(
     pr_data: GitHubPR,
     context_builder,
     pr_url: str,
+    on_progress: Callable | None = None,
 ) -> ReviewAnalyzeResponse:
     started_at = time.perf_counter()
 
@@ -149,6 +151,12 @@ async def _run_multi_agent(
 
     # Wait for Phase 1
     focus_notes = await focus_notes_task
+
+    if on_progress:
+        await on_progress("phase_done", phase="phase1", percent=10)
+
+    if on_progress:
+        await on_progress("phase_start", phase="phase2", message="启动专家分析", percent=10)
 
     # Run 3 agents in parallel
     tasks = []
@@ -163,6 +171,8 @@ async def _run_multi_agent(
     for agent, result in zip(MULTI_AGENTS, agent_results):
         if isinstance(result, Exception):
             logger.error("Agent失败 | agent=%s error=%s", agent.name, result)
+            if on_progress:
+                await on_progress("agent_error", agent=agent.category_prefix, message=str(result)[:100])
             continue
         valid_results.append(result)
 
@@ -172,6 +182,8 @@ async def _run_multi_agent(
     for _agent, r in valid_results:
         m = r.metrics
         total_risks = m.highRiskCount + m.mediumRiskCount + m.lowRiskCount
+        if on_progress:
+            await on_progress("agent_done", agent=_agent, risks=total_risks, high=m.highRiskCount)
         logger.info(
             "%sAgent完成",
             _agent,
@@ -194,9 +206,16 @@ async def _run_multi_agent(
     )
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+    if on_progress:
+        await on_progress("phase_start", phase="phase3", message="合并结果并生成报告", percent=85)
+
     merged = merge_results(valid_results, pr_info, duration_ms)
     conflicts = detect_conflicts(merged.analysis.risks)
     merged = await _phase2_summarize(merged, conflicts)
+
+    if on_progress:
+        await on_progress("phase_done", phase="phase3", percent=100)
 
     final_m = merged.analysis.metrics
     total_risks = final_m.highRiskCount + final_m.mediumRiskCount + final_m.lowRiskCount
@@ -212,7 +231,9 @@ class ReviewOrchestrator:
     def __init__(self, github_service: GitHubPRService):
         self.github_service = github_service
 
-    async def analyze(self, pr_url: str, pr_data: GitHubPR) -> ReviewAnalyzeResponse:
+    async def analyze(
+        self, pr_url: str, pr_data: GitHubPR, on_progress: Callable | None = None
+    ) -> ReviewAnalyzeResponse:
         if _should_use_multi_agent(pr_data):
             logger.info(
                 "使用多Agent分析",
@@ -220,7 +241,7 @@ class ReviewOrchestrator:
             )
             context_builder = ReviewContextBuilder()
             return await _run_multi_agent(
-                self.github_service, pr_data, context_builder, pr_url
+                self.github_service, pr_data, context_builder, pr_url, on_progress=on_progress
             )
 
         logger.info(
