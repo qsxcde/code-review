@@ -67,6 +67,8 @@ defineProps<{
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 10px 28px rgba(30, 41, 59, 0.04);
+  height: 100%;
+  min-height: 0;
 }
 
 h3, h4 {
@@ -80,6 +82,8 @@ h4 { font-size: 13px; font-weight: 800; }
 .diff-card :deep(.el-card__body) {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
   padding: 0;
 }
 

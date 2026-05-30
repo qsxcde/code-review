@@ -2,15 +2,12 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import {
-  Aim,
-  ChatLineRound,
   Clock,
-  Coin,
   DataAnalysis,
   Document,
   Setting,
 } from "@element-plus/icons-vue";
-import type { NavItem, PullRequestInfo, SummaryItem, RiskFile, ChangedFile, AiSuggestion, InsightCard, Issue, RiskLevel } from "./types/review";
+import type { NavItem, PullRequestInfo, SummaryItem, RiskFile, ChangedFile, AiSuggestion, Issue, RiskLevel } from "./types/review";
 import { normalizeGitHubPrUrl, mapAnalyzeResponse, analyzePR } from "./api/reviewApi";
 import AppSidebar from "./components/AppSidebar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
@@ -18,7 +15,6 @@ import PRInfoCard from "./components/PRInfoCard.vue";
 import SummaryCard from "./components/SummaryCard.vue";
 import RiskCard from "./components/RiskCard.vue";
 import DiffViewer from "./components/DiffViewer.vue";
-import InsightCards from "./components/InsightCards.vue";
 import AISummaryPanel from "./components/AISummaryPanel.vue";
 
 const prUrl = ref("https://github.com/octocat/Hello-World/pull/6");
@@ -110,24 +106,6 @@ const aiSuggestions = ref<AiSuggestion[]>([
     description: "当前仅做非空校验，建议补充数值格式、精度和币种一致性检查。",
   },
 ]);
-
-const insightCards: InsightCard[] = [
-  {
-    title: "Review 建议生成",
-    icon: ChatLineRound,
-    rows: ["支付回调建议增加幂等键校验，避免重复通知导致状态错乱。", "订单状态流转建议补充失败回滚和重试上限。"],
-  },
-  {
-    title: "上下文理解",
-    icon: Aim,
-    rows: ["上下文：PR Diff + 关联文件 + 历史提交", "相关文件 12 个，调用链影响 6 个模块"],
-  },
-  {
-    title: "分析质量",
-    icon: Coin,
-    rows: ["模型：GPT-4.1 / DeepSeek-R1 可切换", "置信度 92%，误报抑制：低噪声模式"],
-  },
-];
 
 const topIssues = ref<Issue[]>([
   { title: "支付回调可能重复提交", file: "payment_service.py:128", level: "high" },
@@ -242,7 +220,6 @@ const handleAnalyze = async () => {
             :changed-files="changedFiles"
             :ai-suggestions="aiSuggestions"
           />
-          <InsightCards :insight-cards="insightCards" />
         </div>
 
         <aside class="right-column">
@@ -297,11 +274,11 @@ const handleAnalyze = async () => {
 }
 
 .left-column {
-  grid-template-rows: minmax(196px, auto) minmax(0, 1fr);
+  grid-template-rows: 352px minmax(0, 1fr);
 }
 
 .center-column {
-  grid-template-rows: minmax(430px, 1fr) 168px;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .right-column {

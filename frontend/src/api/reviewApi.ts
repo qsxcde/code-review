@@ -23,6 +23,16 @@ export const toneForSummaryTag = (tag: string): SummaryItem["tone"] => {
   return "green";
 };
 
+const classifySummaryTag = (text: string, fallback = "优化"): string => {
+  const value = text.toLowerCase();
+
+  if (/(test|spec|测试|覆盖率|用例)/i.test(value)) return "测试";
+  if (/(refactor|重构|模块|结构|状态流转)/i.test(value)) return "重构";
+  if (/(add|新增|feature|引入|支持)/i.test(value)) return "新增功能";
+  if (/(fix|修复|优化|建议|校验|异常|风险|impact|影响)/i.test(value)) return "优化";
+  return fallback;
+};
+
 export const suggestionLevel = (type: "must_fix" | "should_fix" | "nice_to_have"): AiSuggestion["level"] =>
   type === "must_fix" ? "高风险" : "中风险";
 
@@ -43,17 +53,40 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
   };
 
   const summaryItems: SummaryItem[] = [
-    { text: data.analysis.summary.overview, tag: "总览", tone: "green" },
-    ...data.analysis.summary.changedModules.map((module) => ({
-      text: `变更模块：${module}`,
-      tag: "模块",
-      tone: toneForSummaryTag("模块"),
+    {
+      text: data.analysis.summary.overview,
+      tag: classifySummaryTag(data.analysis.summary.overview, "新增功能"),
+      tone: toneForSummaryTag(classifySummaryTag(data.analysis.summary.overview, "新增功能")),
+    },
+    ...data.analysis.summary.changedModules.map((module) => {
+      const tag = classifySummaryTag(module, "重构");
+      return {
+        text: `变更模块：${module}`,
+        tag,
+        tone: toneForSummaryTag(tag),
+      };
+    }),
+    ...data.analysis.summary.impact.map((impact) => {
+      const tag = classifySummaryTag(impact, "优化");
+      return {
+        text: impact,
+        tag,
+        tone: toneForSummaryTag(tag),
+      };
+    }),
+    ...data.analysis.risks.slice(0, 4).map((risk) => ({
+      text: `${risk.file}${risk.line ? `:${risk.line}` : ""} - ${risk.issue}`,
+      tag: "优化",
+      tone: toneForSummaryTag("优化"),
     })),
-    ...data.analysis.summary.impact.map((impact) => ({
-      text: impact,
-      tag: "影响",
-      tone: toneForSummaryTag("影响"),
-    })),
+    ...data.analysis.suggestions.slice(0, 3).map((suggestion) => {
+      const tag = classifySummaryTag(suggestion.comment, suggestion.type === "nice_to_have" ? "测试" : "优化");
+      return {
+        text: suggestion.comment,
+        tag,
+        tone: toneForSummaryTag(tag),
+      };
+    }),
   ];
 
   const riskFiles: RiskFile[] = Object.entries(risksByFile)
