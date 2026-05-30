@@ -12,7 +12,7 @@ import redis.asyncio as aioredis
 from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent
 from app.core.config import Settings, get_settings
 from app.core.config import settings as app_settings
-from app.core.db import get_db
+from app.core.db import async_session, get_db
 from app.core.rate_limit import require_rate_limit
 from app.core.security import require_jwt_user
 from app.models.review_record import ReviewRecord
@@ -100,17 +100,19 @@ async def analyze_pr(
 
         async def _run_analysis():
             try:
-                await save_running_record(db, record_id)
+                async with async_session() as task_db:
+                    await save_running_record(task_db, record_id)
 
-                async def _on_progress(event: str, **kwargs):
-                    await pg.publish_progress(redis, record_id, event, **kwargs)
+                    async def _on_progress(event: str, **kwargs):
+                        await pg.publish_progress(redis, record_id, event, **kwargs)
 
-                orchestrator = ReviewOrchestrator(github_service)
-                response = await orchestrator.analyze(pr_url, pr_data, on_progress=_on_progress)
-                await save_completed_record(db, record_id, response)
-                await pg.publish_complete(redis, record_id)
+                    orchestrator = ReviewOrchestrator(github_service)
+                    response = await orchestrator.analyze(pr_url, pr_data, on_progress=_on_progress)
+                    await save_completed_record(task_db, record_id, response)
+                    await pg.publish_complete(redis, record_id)
             except Exception as exc:
-                await save_failed_record(db, record_id)
+                async with async_session() as task_db:
+                    await save_failed_record(task_db, record_id)
                 await pg.publish_error(redis, record_id, "orchestrator", str(exc)[:200], 0)
             finally:
                 await redis.close()

@@ -47,3 +47,8 @@ def sanitize_error_message(message: str) -> str:
         message,
         flags=re.IGNORECASE,
     )[:300]
+
+
+def preview_model_content(content: str, limit: int = 500) -> str:
+    compact = re.sub(r"\s+", " ", content).strip()
+    return sanitize_error_message(compact)[:limit]

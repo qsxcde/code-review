@@ -18,7 +18,7 @@ class OrchestratorRoutingTests(unittest.TestCase):
     def test_small_pr_uses_single(self):
         from app.agents.review.orchestrator import _should_use_multi_agent
 
-        pr = self._make_pr(changed_files=3, additions=500, deletions=300)
+        pr = self._make_pr(changed_files=2, additions=120, deletions=80)
         self.assertFalse(_should_use_multi_agent(pr))
 
     def test_large_pr_uses_multi(self):
@@ -36,13 +36,13 @@ class OrchestratorRoutingTests(unittest.TestCase):
     def test_middle_ground_uses_single(self):
         from app.agents.review.orchestrator import _should_use_multi_agent
 
-        pr = self._make_pr(changed_files=6, additions=1500, deletions=500)
+        pr = self._make_pr(changed_files=3, additions=400, deletions=200)
         self.assertFalse(_should_use_multi_agent(pr))
 
     def test_exact_boundary_uses_single(self):
         from app.agents.review.orchestrator import _should_use_multi_agent
 
-        pr = self._make_pr(changed_files=3, additions=500, deletions=500)
+        pr = self._make_pr(changed_files=2, additions=150, deletions=150)
         self.assertFalse(_should_use_multi_agent(pr))
 
 

@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { analyzePR, fetchGitHubPR, normalizeGitHubPrUrl } from "../api/reviewApi";
+import { analyzePR, fetchGitHubPR, isAsyncAnalyzeResponse, normalizeGitHubPrUrl, streamReviewProgress } from "../api/reviewApi";
+import { fetchReviewRecordDetail } from "../api/historyApi";
 import {
   defaultAiSummaryStats,
   defaultAiSuggestions,
@@ -76,6 +77,38 @@ export const usePrAnalysis = (
     return "分析完成";
   });
 
+  const applyAnalyzeResult = (data: ReviewAnalyzeResponse, githubPR: { files: GitHubPRFile[] }) => {
+    const mapped = mapAnalyzeResponse(data);
+
+    currentAnalysis.value = data;
+    prFiles.value = githubPR.files;
+    pullRequest.value = {
+      ...pullRequest.value,
+      ...mapped.pullRequest,
+    } as PullRequestInfo;
+    summaryItems.value = mapped.summaryItems;
+    riskFiles.value = mapped.riskFiles;
+    riskStats.value = mapped.riskStats;
+    aiSummaryStats.value = mapped.summaryStats;
+    topIssues.value = mapped.topIssues;
+    aiSuggestions.value = mapped.aiSuggestions;
+
+    const firstRiskPath = mapped.riskFiles[0]?.path || "";
+    const nextSelectedCodePath =
+      githubPR.files.find((file) => file.filename === firstRiskPath)?.filename ||
+      githubPR.files[0]?.filename ||
+      firstRiskPath;
+
+    selectedRiskPath.value = firstRiskPath;
+    changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
+    updateSelectedCodeFile(nextSelectedCodePath);
+
+    activeSummaryTag.value = "全部";
+    backendWarning.value = mapped.warnings;
+    analysisDuration.value = data.durationMs / 1000;
+    analysisStatus.value = "completed";
+  };
+
   const updateSelectedCodeFile = (path: string) => {
     selectedCodePath.value = path;
     changedFiles.value = changedFiles.value.map((file) => ({
@@ -119,36 +152,33 @@ export const usePrAnalysis = (
         analyzePR(nextUrl, apiBaseUrl, accessToken),
         fetchGitHubPR(nextUrl, apiBaseUrl, accessToken),
       ]);
-      const mapped = mapAnalyzeResponse(data);
 
-      currentAnalysis.value = data;
-      prFiles.value = githubPR.files;
       pullRequest.value = {
         ...pullRequest.value,
         ...mapGitHubPRToPullRequest(githubPR),
-        ...mapped.pullRequest,
       } as PullRequestInfo;
-      summaryItems.value = mapped.summaryItems;
-      riskFiles.value = mapped.riskFiles;
-      riskStats.value = mapped.riskStats;
-      aiSummaryStats.value = mapped.summaryStats;
-      topIssues.value = mapped.topIssues;
-      aiSuggestions.value = mapped.aiSuggestions;
 
-      const firstRiskPath = mapped.riskFiles[0]?.path || "";
-      const nextSelectedCodePath =
-        githubPR.files.find((file) => file.filename === firstRiskPath)?.filename ||
-        githubPR.files[0]?.filename ||
-        firstRiskPath;
+      if (isAsyncAnalyzeResponse(data)) {
+        backendWarning.value = `多 Agent 分析中，任务 #${data.record_id}`;
+        await streamReviewProgress(apiBaseUrl, data.record_id, accessToken, (event) => {
+          if (event.message) backendWarning.value = event.message;
+          if (event.percent !== undefined) {
+            backendWarning.value = `${backendWarning.value || "多 Agent 分析中"}（${event.percent}%）`;
+          }
+          if (event.event === "error") {
+            throw new Error(event.message || "多 Agent 分析失败");
+          }
+        });
 
-      selectedRiskPath.value = firstRiskPath;
-      changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
-      updateSelectedCodeFile(nextSelectedCodePath);
+        const detail = await fetchReviewRecordDetail(apiBaseUrl, accessToken, data.record_id);
+        if (!detail.result_json) {
+          throw new Error("分析完成但未获取到结果");
+        }
+        applyAnalyzeResult(detail.result_json, githubPR);
+      } else {
+        applyAnalyzeResult(data, githubPR);
+      }
 
-      activeSummaryTag.value = "全部";
-      backendWarning.value = mapped.warnings;
-      analysisDuration.value = data.durationMs / 1000;
-      analysisStatus.value = "completed";
       ElMessage.success("后端分析完成");
     } catch (error) {
       analysisStatus.value = "failed";

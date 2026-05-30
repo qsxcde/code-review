@@ -109,6 +109,8 @@ class ReviewContextBuilder:
         ]
         selected = []
         for f in files:
+            if not f.patch:
+                continue
             filename = f.filename.lower()
             if any(re.search(p, filename) for p in skip_patterns):
                 continue

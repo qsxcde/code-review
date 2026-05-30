@@ -56,7 +56,7 @@ async def publish_complete(
     redis: aioredis.Redis, record_id: int, summary: dict | None = None
 ) -> None:
     await publish_progress(
-        redis, record_id, "complete", status="completed", record_id=record_id,
+        redis, record_id, "complete", status="completed", review_record_id=record_id,
         percent=100, summary=summary,
     )
 

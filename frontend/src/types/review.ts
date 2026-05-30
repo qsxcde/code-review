@@ -124,3 +124,21 @@ export interface ReviewAnalyzeResponse {
   };
   durationMs: number;
 }
+
+export interface ReviewAnalyzeTaskResponse {
+  record_id: number;
+  status: "running" | "pending";
+}
+
+export type ReviewAnalyzeResult = ReviewAnalyzeResponse | ReviewAnalyzeTaskResponse;
+
+export interface ReviewProgressEvent {
+  event: "phase_start" | "phase_done" | "agent_start" | "agent_done" | "agent_error" | "complete" | "error";
+  status?: "running" | "completed" | "failed";
+  record_id?: number;
+  review_record_id?: number;
+  phase?: string;
+  agent?: string;
+  message?: string;
+  percent?: number;
+}
