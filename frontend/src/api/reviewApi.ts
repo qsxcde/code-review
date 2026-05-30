@@ -42,14 +42,16 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
     return acc;
   }, {});
 
-  const pullRequest: Partial<PullRequestInfo> & { changedFiles: number } = {
+  const pullRequest: Partial<PullRequestInfo> = {
     repository: `${data.pr.owner}/${data.pr.repo}`,
     title: data.pr.title,
     description: data.analysis.summary.overview,
     author: data.pr.author,
     sourceBranch: data.pr.headBranch,
     targetBranch: data.pr.baseBranch,
-    changedFiles: data.analysis.metrics.analyzedFileCount,
+    changedFiles: data.pr.changedFiles,
+    additions: data.pr.additions,
+    deletions: data.pr.deletions,
   };
 
   const summaryItems: SummaryItem[] = [

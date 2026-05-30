@@ -76,6 +76,9 @@ class ReviewPRInfo(BaseModel):
     number: int
     baseBranch: str
     headBranch: str
+    changedFiles: int
+    additions: int
+    deletions: int
 
 
 class ReviewAnalyzeResponse(BaseModel):

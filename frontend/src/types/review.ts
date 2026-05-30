@@ -71,6 +71,9 @@ export interface ReviewAnalyzeResponse {
     number: number;
     baseBranch: string;
     headBranch: string;
+    changedFiles: number;
+    additions: number;
+    deletions: number;
   };
   analysis: {
     summary: {
