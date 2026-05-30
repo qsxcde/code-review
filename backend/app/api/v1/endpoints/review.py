@@ -13,6 +13,7 @@ from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi
 from app.core.config import Settings, get_settings
 from app.core.config import settings as app_settings
 from app.core.db import async_session, get_db
+from app.core.redis import get_redis
 from app.core.rate_limit import require_rate_limit
 from app.core.security import require_jwt_user
 from app.models.review_record import ReviewRecord
@@ -69,6 +70,7 @@ async def analyze_pr(
     settings: Settings = Depends(get_settings),
     user_id: int = Depends(require_jwt_user),
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ) -> ReviewAnalyzeResponse:
     github_service = get_github_pr_service(
         token=settings.github_token,
@@ -85,7 +87,7 @@ async def analyze_pr(
     pr_sha = pr_data.head_sha
 
     if pr_sha:
-        cached = await find_cached_record(db, user_id, pr_sha)
+        cached = await find_cached_record(db, user_id, pr_sha, redis=redis)
         if cached is not None:
             logger.info("命中缓存 | pr_sha=%s", pr_sha[:12])
             return cached
@@ -109,7 +111,7 @@ async def analyze_pr(
                     orchestrator = ReviewOrchestrator(github_service)
                     response = await orchestrator.analyze(pr_url, pr_data, on_progress=_on_progress)
                     response.analysis_mode = "multi"
-                    await save_completed_record(task_db, record_id, response, analysis_mode="multi")
+                    await save_completed_record(task_db, record_id, response, analysis_mode="multi", redis=redis)
                     await pg.publish_complete(redis, record_id)
             except Exception as exc:
                 async with async_session() as task_db:
@@ -130,6 +132,6 @@ async def analyze_pr(
         await save_failed_record(db, record_id)
         raise
 
-    await save_completed_record(db, record_id, response, analysis_mode="single")
+    await save_completed_record(db, record_id, response, analysis_mode="single", redis=redis)
     logger.info("持久化完成 | record_id=%d", record_id)
     return response

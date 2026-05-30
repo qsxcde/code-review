@@ -49,10 +49,22 @@ def _record_to_detail(record: ReviewRecord) -> ReviewRecordDetail:
 
 
 async def find_cached_record(
-    db: AsyncSession, user_id: int, pr_sha: str
+    db: AsyncSession, user_id: int, pr_sha: str, redis=None
 ) -> ReviewAnalyzeResponse | None:
     if not pr_sha:
         return None
+
+    cache_key = f"hotcache:review:{pr_sha}"
+
+    # L1: Redis
+    if redis:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                return ReviewAnalyzeResponse.model_validate_json(cached)
+        except Exception:
+            pass
+
     result = await db.execute(
         select(ReviewRecord)
         .where(
@@ -66,7 +78,16 @@ async def find_cached_record(
     record = result.scalar_one_or_none()
     if record is None or record.result_json is None:
         return None
-    return ReviewAnalyzeResponse.model_validate(record.result_json)
+    response = ReviewAnalyzeResponse.model_validate(record.result_json)
+
+    # Write back to Redis L1
+    if redis and record is not None:
+        try:
+            await redis.setex(cache_key, 86400, response.model_dump_json())
+        except Exception:
+            pass
+
+    return response
 
 
 async def create_pending_record(
@@ -100,6 +121,7 @@ async def save_completed_record(
     record_id: int,
     response: ReviewAnalyzeResponse,
     analysis_mode: str = "single",
+    redis=None,
 ) -> None:
     result = await db.execute(select(ReviewRecord).where(ReviewRecord.id == record_id))
     record = result.scalar_one_or_none()
@@ -125,6 +147,13 @@ async def save_completed_record(
     record.duration_ms = response.durationMs
     record.completed_at = datetime.utcnow()
     await db.commit()
+
+    if redis:
+        try:
+            cache_key = f"hotcache:review:{record.pr_sha}"
+            await redis.setex(cache_key, 86400, response.model_dump_json())
+        except Exception:
+            pass
 
 
 async def save_failed_record(db: AsyncSession, record_id: int) -> None:
