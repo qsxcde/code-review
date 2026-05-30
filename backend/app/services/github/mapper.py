@@ -21,6 +21,7 @@ def map_github_pr_response(
         html_url=pr_data["html_url"],
         base_branch=pr_data["base"]["ref"],
         head_branch=pr_data["head"]["ref"],
+        head_sha=pr_data["head"]["sha"],
         changed_files=pr_data["changed_files"],
         additions=pr_data["additions"],
         deletions=pr_data["deletions"],
