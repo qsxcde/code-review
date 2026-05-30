@@ -5,7 +5,10 @@ import logging
 import time
 
 from app.agents.review.aggregator import detect_conflicts, merge_results
+from app.agents.review.context import ReviewContextBuilder
 from app.agents.review.graph import ReviewGraphRunner
+from app.agents.review.prompts.orchestrator_phase1 import SYSTEM_PROMPT as PHASE1_PROMPT
+from app.agents.review.prompts.orchestrator_phase2 import SYSTEM_PROMPT as PHASE2_PROMPT
 from app.agents.review.specialist import MULTI_AGENTS, SpecialistAgent
 from app.core.config import settings
 from app.schemas.github import GitHubPR
@@ -59,8 +62,6 @@ async def _run_single_agent_for(
 
 
 async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
-    from app.agents.review.prompts.orchestrator_phase1 import SYSTEM_PROMPT
-
     try:
         languages = list({f.filename.split(".")[-1] for f in pr_data.files if "." in f.filename})
         file_list = [f.filename for f in pr_data.files[:20]]
@@ -78,7 +79,7 @@ async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
             model=settings.deep_model,
         )
         wrapper = {"pr_payload": json.dumps(phase1_payload, ensure_ascii=False)}
-        result = await llm.analyze_payload(wrapper, system_prompt=SYSTEM_PROMPT)
+        result = await llm.analyze_payload(wrapper, system_prompt=PHASE1_PROMPT)
         focus_notes = json.loads(result.summary.overview)
         logger.info(
             "阶段1完成",
@@ -97,8 +98,6 @@ async def _phase2_summarize(
     merged_response: ReviewAnalyzeResponse,
     conflicts: list[dict],
 ) -> ReviewAnalyzeResponse:
-    from app.agents.review.prompts.orchestrator_phase2 import SYSTEM_PROMPT
-
     try:
         summary_data = {
             "risks_count": len(merged_response.analysis.risks),
@@ -124,7 +123,7 @@ async def _phase2_summarize(
             model=settings.deep_model,
         )
         wrapper = {"pr_payload": json.dumps(summary_data, ensure_ascii=False)}
-        result = await llm.analyze_payload(wrapper, system_prompt=SYSTEM_PROMPT)
+        result = await llm.analyze_payload(wrapper, system_prompt=PHASE2_PROMPT)
         phase2_data = json.loads(result.summary.overview)
         merged_response.analysis.summary.overview = phase2_data.get("overview", "")
         merged_response.analysis.summary.impact = phase2_data.get("impact", [])
@@ -219,8 +218,6 @@ class ReviewOrchestrator:
                 "使用多Agent分析",
                 extra={"props": {"files": pr_data.changed_files, "lines": pr_data.additions + pr_data.deletions}},
             )
-            from app.agents.review.context import ReviewContextBuilder
-
             context_builder = ReviewContextBuilder()
             return await _run_multi_agent(
                 self.github_service, pr_data, context_builder, pr_url

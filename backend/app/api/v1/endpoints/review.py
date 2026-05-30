@@ -17,7 +17,7 @@ from app.schemas.review import (
 )
 from app.services.github import get_github_pr_service
 from app.services.llm import LLMReviewService
-from app.services.review.history import (
+from app.services.review.record_service import (
     create_pending_record,
     find_cached_record,
     save_completed_record,
