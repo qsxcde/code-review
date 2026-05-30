@@ -25,6 +25,7 @@ class GitHubPR(BaseModel):
     html_url: str
     base_branch: str
     head_branch: str
+    head_sha: str = ""
     changed_files: int
     additions: int
     deletions: int
