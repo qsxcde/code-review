@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { Menu, MagicStick, Operation, ArrowRight } from "@element-plus/icons-vue";
-import type { ChangedFile, AiSuggestion } from "../types/review";
+import type { ChangedFile, AiSuggestion, CodeLine } from "../types/review";
 
 defineProps<{
-  codeLines: Array<{ line: number; mark: string; code: string }>;
+  codeLines: CodeLine[];
   changedFiles: ChangedFile[];
   aiSuggestions: AiSuggestion[];
+  selectedFilePath: string;
+}>();
+
+const emit = defineEmits<{
+  "select-file": [path: string];
 }>();
 </script>
 
@@ -14,7 +19,7 @@ defineProps<{
     <header class="diff-toolbar">
       <div>
         <h3>代码变更</h3>
-        <span>service/payment_service.py</span>
+        <span>{{ selectedFilePath || "暂无选中文件" }}</span>
       </div>
       <div class="toolbar-actions">
         <el-button size="small" :icon="Menu">统一视图</el-button>
@@ -27,16 +32,19 @@ defineProps<{
       <aside class="file-list">
         <button
           v-for="file in changedFiles"
-          :key="`${file.folder}/${file.name}`"
+          :key="file.path"
           class="file-item"
-          :class="{ active: file.active }"
+          :class="{ active: file.path === selectedFilePath }"
+          type="button"
+          @click="emit('select-file', file.path)"
         >
-          <span>{{ file.folder }}/{{ file.name }}</span>
+          <span>{{ file.path }}</span>
           <em>{{ file.alerts }}</em>
         </button>
       </aside>
 
       <section class="code-diff">
+        <p v-if="codeLines.length === 0" class="empty-diff">暂无代码变更内容</p>
         <div v-for="line in codeLines" :key="`${line.line}-${line.code}`" class="code-line" :class="line.mark === '+' ? 'add' : line.mark === '-' ? 'remove' : ''">
           <span>{{ line.line }}</span>
           <code>{{ line.mark }} {{ line.code }}</code>
@@ -45,7 +53,8 @@ defineProps<{
 
       <aside class="ai-suggestion">
         <h4>AI 建议</h4>
-        <article v-for="suggestion in aiSuggestions" :key="suggestion.title">
+        <p v-if="aiSuggestions.length === 0" class="empty-suggestion">暂无 AI 建议</p>
+        <article v-for="suggestion in aiSuggestions" :key="`${suggestion.line}-${suggestion.title}`">
           <div class="suggestion-head">
             <el-tag :type="suggestion.level === '高风险' ? 'danger' : 'warning'" size="small">{{ suggestion.level }}</el-tag>
             <span>{{ suggestion.line }}</span>
@@ -153,9 +162,17 @@ h4 { font-size: 13px; font-weight: 800; }
 }
 
 .code-diff {
-  overflow: hidden;
+  overflow: auto;
   padding: 10px 0;
   background: #fff;
+}
+
+.empty-diff,
+.empty-suggestion {
+  margin: 0;
+  padding: 12px 14px;
+  color: $soft;
+  font-size: 12px;
 }
 
 .code-line {
@@ -184,7 +201,7 @@ h4 { font-size: 13px; font-weight: 800; }
 }
 
 .ai-suggestion {
-  overflow: hidden;
+  overflow: auto;
   padding: 14px;
   border-left: 1px solid $line;
   background: #fbfdff;

@@ -127,8 +127,8 @@ h3 {
 
 .summary-card li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 14px;
   align-items: center;
   color: $muted;
   font-size: 14px;
@@ -137,6 +137,11 @@ h3 {
   span:first-child {
     min-width: 0;
     word-break: break-word;
+  }
+
+  .el-tag {
+    justify-self: end;
+    max-width: 72px;
   }
 }
 

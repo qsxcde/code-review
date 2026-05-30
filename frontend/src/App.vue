@@ -18,8 +18,18 @@ import type {
   RiskLevel,
   RiskStats,
   AiSummaryStats,
+  CodeLine,
+  GitHubPRFile,
 } from "./types/review";
-import { normalizeGitHubPrUrl, mapAnalyzeResponse, analyzePR } from "./api/reviewApi";
+import {
+  normalizeGitHubPrUrl,
+  mapAnalyzeResponse,
+  analyzePR,
+  fetchGitHubPR,
+  mapGitHubFiles,
+  mapGitHubPRToPullRequest,
+  parsePatchToCodeLines,
+} from "./api/reviewApi";
 import AppSidebar from "./components/AppSidebar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
 import PRInfoCard from "./components/PRInfoCard.vue";
@@ -37,6 +47,8 @@ const activeSummaryTag = ref("全部");
 const selectedRiskPath = ref("service/payment_service.py");
 const backendWarning = ref("");
 const errorMessage = ref("");
+const selectedCodePath = ref("service/payment_service.py");
+const prFiles = ref<GitHubPRFile[]>([]);
 
 const navItems: NavItem[] = [
   { label: "PR 分析", icon: DataAnalysis, active: true },
@@ -91,16 +103,16 @@ const aiSummaryStats = ref<AiSummaryStats>({
 });
 
 const changedFiles = ref<ChangedFile[]>([
-  { folder: "service", name: "payment_service.py", alerts: 6, active: true },
-  { folder: "service", name: "order_service.py", alerts: 3 },
-  { folder: "controller", name: "order_controller.java", alerts: 4 },
-  { folder: "controller", name: "payment_controller.py", alerts: 2 },
-  { folder: "repository", name: "order_repository.py", alerts: 2 },
-  { folder: "test", name: "test_payment_retry.py", alerts: 1 },
-  { folder: "test", name: "test_order_service.py", alerts: 1 },
+  { path: "service/payment_service.py", folder: "service", name: "payment_service.py", alerts: 6, active: true },
+  { path: "service/order_service.py", folder: "service", name: "order_service.py", alerts: 3 },
+  { path: "controller/order_controller.java", folder: "controller", name: "order_controller.java", alerts: 4 },
+  { path: "controller/payment_controller.py", folder: "controller", name: "payment_controller.py", alerts: 2 },
+  { path: "repository/order_repository.py", folder: "repository", name: "order_repository.py", alerts: 2 },
+  { path: "test/test_payment_retry.py", folder: "test", name: "test_payment_retry.py", alerts: 1 },
+  { path: "test/test_order_service.py", folder: "test", name: "test_order_service.py", alerts: 1 },
 ]);
 
-const codeLines = [
+const codeLines = ref<CodeLine[]>([
   { line: 118, mark: " ", code: "@@ -118,15 +118,18 @@ def handle_payment_callback(self, request):" },
   { line: 119, mark: " ", code: "# 验证回调签名" },
   { line: 120, mark: " ", code: "if not self._verify_signature(request):" },
@@ -116,7 +128,7 @@ const codeLines = [
   { line: 134, mark: " ", code: "order = self.order_service.get_order(order_id)" },
   { line: 135, mark: " ", code: "if not order:" },
   { line: 136, mark: " ", code: "    return self._error_response(\"order not found\")" },
-];
+]);
 
 const aiSuggestions = ref<AiSuggestion[]>([
   {
@@ -145,6 +157,11 @@ const filteredSummaryItems = computed(() => {
   return summaryItems.value.filter((item) => item.tag === activeSummaryTag.value);
 });
 
+const selectedFileSuggestions = computed(() => {
+  const matched = aiSuggestions.value.filter((suggestion) => suggestion.line === selectedCodePath.value);
+  return matched.length > 0 ? matched : aiSuggestions.value;
+});
+
 const analysisStatusText = computed(() => {
   if (analysisStatus.value === "analyzing") return "正在获取 PR 变更并进行 AI 分析...";
   if (analysisStatus.value === "failed") return errorMessage.value || "分析失败，请稍后重试";
@@ -159,6 +176,20 @@ const riskLabel: Record<RiskLevel, string> = {
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const reviewApiToken = import.meta.env.VITE_REVIEW_API_TOKEN || "";
+
+const updateSelectedCodeFile = (path: string) => {
+  selectedCodePath.value = path;
+  changedFiles.value = changedFiles.value.map((file) => ({
+    ...file,
+    active: file.path === path,
+  }));
+
+  const file = prFiles.value.find((item) => item.filename === path);
+  const parsedLines = parsePatchToCodeLines(file?.patch);
+  codeLines.value = parsedLines.length > 0
+    ? parsedLines
+    : [{ line: 1, mark: " ", code: file ? "该文件没有可展示的 patch 内容" : "暂无代码变更内容" }];
+};
 
 const handleAnalyze = async () => {
   const nextUrl = normalizeGitHubPrUrl(prUrl.value);
@@ -178,22 +209,35 @@ const handleAnalyze = async () => {
   backendWarning.value = "";
 
   try {
-    const data = await analyzePR(nextUrl, apiBaseUrl, reviewApiToken);
+    const [data, githubPR] = await Promise.all([
+      analyzePR(nextUrl, apiBaseUrl, reviewApiToken),
+      fetchGitHubPR(nextUrl, apiBaseUrl, reviewApiToken),
+    ]);
     const mapped = mapAnalyzeResponse(data);
 
-    pullRequest.value = { ...pullRequest.value, ...mapped.pullRequest } as PullRequestInfo;
+    prFiles.value = githubPR.files;
+    pullRequest.value = {
+      ...pullRequest.value,
+      ...mapGitHubPRToPullRequest(githubPR),
+      ...mapped.pullRequest,
+    } as PullRequestInfo;
     summaryItems.value = mapped.summaryItems;
     riskFiles.value = mapped.riskFiles;
     riskStats.value = mapped.riskStats;
     aiSummaryStats.value = mapped.summaryStats;
-    changedFiles.value = mapped.changedFiles;
-    if (mapped.riskFiles[0]) {
-      selectedRiskPath.value = mapped.riskFiles[0].path;
-    } else {
-      selectedRiskPath.value = "";
-    }
     topIssues.value = mapped.topIssues;
     aiSuggestions.value = mapped.aiSuggestions;
+
+    const firstRiskPath = mapped.riskFiles[0]?.path || "";
+    const nextSelectedCodePath =
+      githubPR.files.find((file) => file.filename === firstRiskPath)?.filename ||
+      githubPR.files[0]?.filename ||
+      firstRiskPath;
+
+    selectedRiskPath.value = firstRiskPath;
+    changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
+    updateSelectedCodeFile(nextSelectedCodePath);
+
     activeSummaryTag.value = "全部";
     backendWarning.value = mapped.warnings;
     analysisDuration.value = data.durationMs / 1000;
@@ -242,7 +286,6 @@ const handleAnalyze = async () => {
             :risk-files="riskFiles"
             :risk-stats="riskStats"
             :selected-risk-path="selectedRiskPath"
-            @select-file="selectedRiskPath = $event"
           />
         </div>
 
@@ -250,7 +293,9 @@ const handleAnalyze = async () => {
           <DiffViewer
             :code-lines="codeLines"
             :changed-files="changedFiles"
-            :ai-suggestions="aiSuggestions"
+            :ai-suggestions="selectedFileSuggestions"
+            :selected-file-path="selectedCodePath"
+            @select-file="updateSelectedCodeFile"
           />
         </div>
 
@@ -310,7 +355,7 @@ const handleAnalyze = async () => {
 }
 
 .left-column {
-  grid-template-rows: 352px minmax(0, 1fr);
+  grid-template-rows: minmax(340px, 1fr) 310px;
 }
 
 .center-column {
@@ -352,6 +397,10 @@ const handleAnalyze = async () => {
   .hero-row,
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .left-column {
+    grid-template-rows: auto auto;
   }
 }
 </style>
