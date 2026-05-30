@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     openai_base_url: str | None = Field(default=None, validation_alias="OPENAI_BASE_URL")
     openai_model: str | None = Field(default=None, validation_alias="OPENAI_MODEL")
+    deep_model: str = Field(default="deepseek-v4-pro", validation_alias="DEEP_MODEL")
+    fast_model: str = Field(default="deepseek-v4-flash", validation_alias="FAST_MODEL")
 
     database_url: str = Field(
         default="mysql+aiomysql://root:@localhost:3306/code_review",
@@ -70,6 +72,8 @@ class Settings(BaseSettings):
         "openai_api_key",
         "openai_base_url",
         "openai_model",
+        "deep_model",
+        "fast_model",
         mode="before",
     )
     @classmethod

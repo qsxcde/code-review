@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from app.schemas.github import GitHubPR, GitHubPRFile
@@ -85,3 +86,63 @@ class ReviewContextBuilder:
             "lock 文件、构建产物和二进制资源默认不送入模型。",
         ]
         return [note for note in notes if note]
+
+    def build_filtered(
+        self, pr_data, agents
+    ) -> dict[str, dict[str, Any]]:
+        """Build filtered contexts for multiple specialist agents.
+
+        Returns a dict mapping agent name to context payload.
+        """
+        contexts: dict[str, dict[str, Any]] = {}
+        for agent in agents:
+            selected = self._select_files_for_agent(pr_data.files, agent)
+            context, count = self._build_from_selected(selected)
+            contexts[agent.name] = context
+        return contexts
+
+    def _select_files_for_agent(self, files, agent) -> list:
+        """Select files matching the agent's filter policy."""
+        skip_patterns = [
+            r"\.json$", r"\.lock$", r"\.yml$", r"\.yaml$",
+            r"\.md$", r"\.svg$", r"\.png$", r"\.css$",
+        ]
+        selected = []
+        for f in files:
+            filename = f.filename.lower()
+            if any(re.search(p, filename) for p in skip_patterns):
+                continue
+            if "test" in filename:
+                continue
+            if agent.include_pattern and not re.search(
+                agent.include_pattern, filename
+            ):
+                continue
+            if len(selected) >= agent.max_files:
+                break
+            selected.append(f)
+        return selected
+
+    def _build_from_selected(
+        self, files: list
+    ) -> tuple[dict[str, Any], int]:
+        """Build context from pre-selected files list."""
+        analyzed_count = len(files)
+        file_patches = []
+        for f in files:
+            patch = f.patch or ""
+            truncated = len(patch) > MAX_PATCH_CHARS
+            if truncated:
+                patch = patch[:MAX_PATCH_CHARS]
+            file_patches.append({
+                "filename": f.filename,
+                "status": f.status,
+                "additions": f.additions,
+                "deletions": f.deletions,
+                "patch": patch,
+                "truncated": truncated,
+            })
+        return {
+            "files": file_patches,
+            "file_count": analyzed_count,
+        }, analyzed_count

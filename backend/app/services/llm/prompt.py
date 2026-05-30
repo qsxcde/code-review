@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import HTTPException, status
 
 
-def build_review_prompt() -> Any:
+def build_review_prompt(system_prompt: str | None = None) -> Any:
     try:
         from langchain_core.prompts import ChatPromptTemplate
     except ImportError as exc:
@@ -15,12 +15,12 @@ def build_review_prompt() -> Any:
     return ChatPromptTemplate.from_messages(
         [
             (
-                "system",
-                "你是一名资深代码审查工程师。你只分析用户提供的 PR diff，"
-                "重点关注安全、逻辑正确性、异常处理、数据一致性、并发、权限控制和测试缺失。"
-                "你的回答必须是严格 JSON，不要输出 Markdown 或额外解释。"
-                "JSON 的字段名必须保持 schema 中的英文名称，但所有字段内容必须使用中文。",
-            ),
+                "system", system_prompt or (
+                    "你是一名资深代码审查工程师。你只分析用户提供的 PR diff，"
+                    "重点关注安全、逻辑正确性、异常处理、数据一致性、并发、权限控制和测试缺失。"
+                    "你的回答必须是严格 JSON，不要输出 Markdown 或额外解释。"
+                    "JSON 的字段名必须保持 schema 中的英文名称，但所有字段内容必须使用中文。"
+                )),
             (
                 "human",
                 "请返回一个严格符合以下 JSON Schema 的 JSON 对象：\n"

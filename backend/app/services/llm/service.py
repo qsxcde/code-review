@@ -37,13 +37,17 @@ class LLMReviewService:
         payload = build_mock_review_payload(request)
         return await self._call_llm_with_payload(payload)
 
-    async def analyze_payload(self, payload: dict[str, Any]) -> ReviewResult:
-        return await self._call_llm_with_payload(payload)
+    async def analyze_payload(
+        self, payload: dict[str, Any], system_prompt: str | None = None
+    ) -> ReviewResult:
+        return await self._call_llm_with_payload(payload, system_prompt)
 
-    async def _call_llm_with_payload(self, payload: dict[str, Any]) -> ReviewResult:
+    async def _call_llm_with_payload(
+        self, payload: dict[str, Any], system_prompt: str | None = None
+    ) -> ReviewResult:
         self._ensure_model_configured()
 
-        prompt = build_review_prompt()
+        prompt = build_review_prompt(system_prompt)
         schema = json.dumps(ReviewResult.model_json_schema(), ensure_ascii=False)
         max_attempts = 1 + MAX_RETRIES
 

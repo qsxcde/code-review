@@ -3,7 +3,7 @@ import time
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.review import ReviewGraphRunner
+from app.agents.review.orchestrator import ReviewOrchestrator
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.core.rate_limit import require_rate_limit
@@ -76,8 +76,8 @@ async def analyze_pr(
 
     started_at = time.perf_counter()
     try:
-        graph = ReviewGraphRunner(github_service, llm_service)
-        response = await graph.analyze(pr_url)
+        orchestrator = ReviewOrchestrator(github_service)
+        response = await orchestrator.analyze(pr_url, pr_data)
     except Exception:
         await save_failed_record(db, record_id)
         raise

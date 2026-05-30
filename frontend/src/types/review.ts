@@ -88,6 +88,7 @@ export interface GitHubPRResponse {
   html_url: string;
   base_branch: string;
   head_branch: string;
+  head_sha: string;
   changed_files: number;
   additions: number;
   deletions: number;

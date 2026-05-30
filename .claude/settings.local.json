@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem *)",
+      "Bash(python -c \"from app.services.llm.service import LLMReviewService; from app.services.llm.prompt import build_review_prompt; print\\('ok'\\)\")",
+      "Bash(python -c \"from app.agents.review.specialist import SECURITY_AGENT, MULTI_AGENTS; print\\(len\\(MULTI_AGENTS\\), SECURITY_AGENT.name\\)\")",
+      "Bash(python -c \"from app.agents.review.context import ReviewContextBuilder; b = ReviewContextBuilder\\(\\); print\\(hasattr\\(b, 'build_filtered'\\)\\)\")",
+      "Bash(python -c \"from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent; print\\('ok'\\)\")",
+      "Bash(python -c \"from app.api.v1.endpoints.review import router; print\\('ok'\\)\")",
+      "Bash(python -m pytest tests/ -v --ignore=tests/test_auth_endpoints.py --tb=line)",
+      "Bash(python -m compileall app/)"
+    ]
+  }
+}
