@@ -9,3 +9,5 @@ node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+docs/
+设计文档.md

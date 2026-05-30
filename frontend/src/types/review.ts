@@ -3,6 +3,7 @@ import type { DataAnalysis } from "@element-plus/icons-vue";
 export type RiskLevel = "high" | "medium" | "low";
 
 export interface NavItem {
+  key: "analysis" | "history" | "reports" | "settings";
   label: string;
   icon: typeof DataAnalysis;
   active?: boolean;
@@ -105,6 +106,35 @@ export interface AuthSession {
   refresh_token: string;
   token_type: string;
 }
+
+export interface ReviewRecord {
+  id: number;
+  pr_url: string;
+  pr_title: string | null;
+  owner: string | null;
+  repo: string | null;
+  pr_number: number | null;
+  status: string;
+  file_count: number;
+  risk_counts: Record<string, number> | null;
+  duration_ms: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ReviewRecordDetail extends ReviewRecord {
+  summary_json: Record<string, unknown> | null;
+  result_json: ReviewAnalyzeResponse | null;
+}
+
+export interface ReviewRecordListResponse {
+  items: ReviewRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export type FeedbackRating = "helpful" | "not_helpful" | "false_positive";
 
 export interface AiSuggestion {
   level: "高风险" | "中风险";

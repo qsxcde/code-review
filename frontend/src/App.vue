@@ -48,6 +48,9 @@ import SummaryCard from "./components/SummaryCard.vue";
 import RiskCard from "./components/RiskCard.vue";
 import DiffViewer from "./components/DiffViewer.vue";
 import AISummaryPanel from "./components/AISummaryPanel.vue";
+import HistoryView from "./components/HistoryView.vue";
+
+type AppView = NavItem["key"];
 
 const prUrl = ref("https://github.com/octocat/Hello-World/pull/6");
 const isAnalyzing = ref(false);
@@ -66,13 +69,14 @@ const authMode = ref<"login" | "register">("login");
 const authEmail = ref("");
 const authPassword = ref("");
 const authLoading = ref(false);
+const activeView = ref<AppView>("analysis");
 
-const navItems: NavItem[] = [
-  { label: "PR 分析", icon: DataAnalysis, active: true },
-  { label: "历史分析", icon: Clock },
-  { label: "报告中心", icon: Document },
-  { label: "设置中心", icon: Setting },
-];
+const navItems = computed<NavItem[]>(() => [
+  { key: "analysis", label: "PR 分析", icon: DataAnalysis, active: activeView.value === "analysis" },
+  { key: "history", label: "历史分析", icon: Clock, active: activeView.value === "history" },
+  { key: "reports", label: "报告中心", icon: Document, active: activeView.value === "reports" },
+  { key: "settings", label: "设置中心", icon: Setting, active: activeView.value === "settings" },
+]);
 
 const pullRequest = ref<PullRequestInfo>({
   repository: "org/ecommerce-platform",
@@ -241,6 +245,16 @@ const handleLogout = async () => {
   }
 };
 
+const handleSelectView = (view: AppView) => {
+  if (view === "history" && !currentAccessToken.value) {
+    openAuthDialog("login");
+    ElMessage.warning("请先登录后查看历史分析");
+    return;
+  }
+
+  activeView.value = view;
+};
+
 const updateSelectedCodeFile = (path: string) => {
   selectedCodePath.value = path;
   changedFiles.value = changedFiles.value.map((file) => ({
@@ -334,12 +348,13 @@ const handleAnalyze = async () => {
     <AppSidebar
       :nav-items="navItems"
       :user="authSession?.user || null"
+      @select="handleSelectView"
       @login="openAuthDialog('login')"
       @register="openAuthDialog('register')"
       @logout="handleLogout"
     />
 
-    <main class="workspace">
+    <main v-if="activeView === 'analysis'" class="workspace">
       <section class="hero-row">
         <SearchPanel
           :pr-url="prUrl"
@@ -387,6 +402,21 @@ const handleAnalyze = async () => {
             :risk-label="riskLabel"
           />
         </aside>
+      </section>
+    </main>
+
+    <main v-else-if="activeView === 'history'" class="workspace">
+      <HistoryView
+        :api-base-url="apiBaseUrl"
+        :access-token="currentAccessToken"
+        @require-login="openAuthDialog('login')"
+      />
+    </main>
+
+    <main v-else class="workspace placeholder-workspace">
+      <section class="placeholder-panel">
+        <h2>{{ activeView === "reports" ? "报告中心" : "设置中心" }}</h2>
+        <p>该模块稍后接入。</p>
       </section>
     </main>
 
@@ -485,6 +515,32 @@ const handleAnalyze = async () => {
 
 .right-column {
   min-height: 0;
+}
+
+.placeholder-workspace {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.placeholder-panel {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  min-height: 0;
+  border: 1px solid $border;
+  border-radius: 12px;
+  color: $muted;
+  background: #fff;
+
+  h2,
+  p {
+    margin: 0;
+    text-align: center;
+  }
+
+  h2 {
+    color: $text;
+    font-size: 20px;
+  }
 }
 
 :global(.auth-dialog .el-dialog__body) {

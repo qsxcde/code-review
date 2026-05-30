@@ -8,6 +8,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
+  select: [key: NavItem["key"]];
   login: [];
   register: [];
   logout: [];
@@ -25,7 +26,14 @@ const emit = defineEmits<{
     </div>
 
     <nav class="nav-list">
-      <button v-for="item in navItems" :key="item.label" class="nav-item" :class="{ active: item.active }">
+      <button
+        v-for="item in navItems"
+        :key="item.key"
+        class="nav-item"
+        :class="{ active: item.active }"
+        type="button"
+        @click="emit('select', item.key)"
+      >
         <el-icon><component :is="item.icon" /></el-icon>
         <span>{{ item.label }}</span>
       </button>
