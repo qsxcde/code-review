@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     rating      ENUM('helpful','not_helpful','false_positive') NOT NULL,
     comment     TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (record_id) REFERENCES review_records(id),
+    FOREIGN KEY (record_id) REFERENCES review_records(id) ON DELETE CASCADE,
     INDEX idx_record_id (record_id),
     UNIQUE KEY idx_record_risk (record_id, risk_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

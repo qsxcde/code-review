@@ -2,9 +2,10 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.feedback import Feedback
 from app.models.review_record import ReviewRecord
 from app.schemas.review import ReviewAnalyzeResponse
 from app.schemas.review_history import ReviewRecordDetail, ReviewRecordListResponse, ReviewRecordOut
@@ -280,5 +281,6 @@ async def delete_record(db: AsyncSession, record_id: int, user_id: int) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review record not found",
         )
+    await db.execute(delete(Feedback).where(Feedback.record_id == record_id))
     await db.delete(record)
     await db.commit()

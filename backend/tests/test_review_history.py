@@ -4,6 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.core.db import get_db as _orig_get_db
+from app.core.rate_limit import require_rate_limit as _orig_require_rate_limit
+from app.core.security import require_jwt_user as _orig_require_jwt_user
+
 
 class ReviewHistoryAPITests(unittest.TestCase):
     @classmethod
@@ -12,74 +16,61 @@ class ReviewHistoryAPITests(unittest.TestCase):
         cls._mock_db.commit = AsyncMock()
         cls._mock_db.add = MagicMock()
 
-        # ------------------------------------------------------------------
-        # Patch "source" dependencies BEFORE any endpoint module is imported.
-        # Patching inside the endpoint modules is too late: the
-        # patch.start() call itself triggers the import, which causes
-        # Depends(...) in the function signatures to capture the real
-        # (unpatched) function reference.
-        # ------------------------------------------------------------------
-        cls._jwt_patch = patch(
-            "app.core.security.require_jwt_user", lambda: 1
-        )
-        cls._jwt_patch.start()
-
-        cls._rate_patch = patch(
-            "app.core.rate_limit.require_rate_limit", lambda: None
-        )
-        cls._rate_patch.start()
-
         # Prevent startup from trying to connect to a real Redis server.
+        # get_redis is called directly (not via Depends) in startup_services,
+        # so a module-level patch is still needed here.
         cls._redis_patch = patch(
             "app.core.redis.get_redis", AsyncMock(return_value=MagicMock())
         )
         cls._redis_patch.start()
 
-        # Patch get_db at its source so that Depends(get_db) in endpoint
-        # signatures picks up the mock session provider.
-        cls._get_db_patch = patch(
-            "app.core.db.get_db", lambda: cls._mock_db
-        )
-        cls._get_db_patch.start()
-
         cls._history_patch = patch(
-            "app.api.v1.endpoints.review.find_cached_record",
+            "app.services.review.find_cached_record",
             AsyncMock(return_value=None),
         )
         cls._history_patch.start()
 
         cls._create_patch = patch(
-            "app.api.v1.endpoints.review.create_pending_record",
+            "app.services.review.create_pending_record",
             AsyncMock(return_value=1),
         )
         cls._create_patch.start()
 
         cls._save_patch = patch(
-            "app.api.v1.endpoints.review.save_completed_record",
+            "app.services.review.save_completed_record",
             AsyncMock(),
         )
         cls._save_patch.start()
 
         cls._save_failed_patch = patch(
-            "app.api.v1.endpoints.review.save_failed_record",
+            "app.services.review.save_failed_record",
             AsyncMock(),
         )
         cls._save_failed_patch.start()
 
         from app.main import app
 
+        # Use FastAPI dependency_overrides for endpoint dependencies.
+        # These work regardless of which test class imported the app first.
+        app.dependency_overrides[_orig_get_db] = lambda: cls._mock_db
+        app.dependency_overrides[_orig_require_jwt_user] = lambda: 1
+        app.dependency_overrides[_orig_require_rate_limit] = lambda: None
+
+        cls._app = app
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
-        cls._jwt_patch.stop()
-        cls._rate_patch.stop()
         cls._redis_patch.stop()
-        cls._get_db_patch.stop()
         cls._history_patch.stop()
         cls._create_patch.stop()
         cls._save_patch.stop()
         cls._save_failed_patch.stop()
+
+        app = cls._app
+        app.dependency_overrides.pop(_orig_get_db, None)
+        app.dependency_overrides.pop(_orig_require_jwt_user, None)
+        app.dependency_overrides.pop(_orig_require_rate_limit, None)
 
     def setUp(self):
         self._mock_db.execute = AsyncMock()

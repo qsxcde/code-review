@@ -16,7 +16,7 @@ from app.core.jwt import (
 class JWTTokenCreationTests(unittest.TestCase):
     def setUp(self):
         self._settings_patch = patch(
-            "app.services.auth.jwt.settings",
+            "app.core.jwt.settings",
             Settings(
                 JWT_SECRET="test-secret-key-that-is-at-least-32-chars!!",
                 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15,
@@ -40,7 +40,7 @@ class JWTTokenCreationTests(unittest.TestCase):
         self.assertIn("exp", payload)
 
     def test_refresh_token_contains_expected_payload(self):
-        token = create_refresh_token(42)
+        token = create_refresh_token(42, "user@example.com")
         payload = decode_token(token, REFRESH_TYPE)
 
         self.assertEqual(payload["sub"], "42")

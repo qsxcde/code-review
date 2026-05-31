@@ -102,15 +102,25 @@ export const useReviewHistory = (
   };
 
   const removeRecord = async (record: ReviewRecord) => {
-    await ElMessageBox.confirm("删除后无法恢复，确认删除这条评审历史吗？", "删除记录", {
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-      type: "warning",
-    });
+    try {
+      await ElMessageBox.confirm("删除后无法恢复，确认删除这条审查历史吗？", "删除记录", {
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        type: "warning",
+      });
+    } catch {
+      return;
+    }
 
-    await deleteReviewRecord(getApiBaseUrl(), getAccessToken(), record.id);
-    ElMessage.success("已删除");
-    await loadRecords();
+    try {
+      await deleteReviewRecord(getApiBaseUrl(), getAccessToken(), record.id);
+      ElMessage.success("已删除");
+      await loadRecords();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "历史记录删除失败";
+      ElMessage.error(message);
+      if (message.includes("401") || message.includes("token")) requireLogin();
+    }
   };
 
   const sendFeedback = async (riskIndex: number, rating: FeedbackRating) => {

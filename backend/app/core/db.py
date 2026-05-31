@@ -23,3 +23,10 @@ async_session = async_sessionmaker(
 async def get_db() -> AsyncSession:
     async with async_session() as session:
         yield session
+
+
+async def ensure_review_rule_table() -> None:
+    from app.models.review_rule import ReviewRule
+
+    async with engine.begin() as conn:
+        await conn.run_sync(ReviewRule.__table__.create, checkfirst=True)
