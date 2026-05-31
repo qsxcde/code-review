@@ -14,6 +14,18 @@ class GitHubPRFile(BaseModel):
     patch: str | None = None
 
 
+class PRComment(BaseModel):
+    author: str
+    body: str
+    created_at: str
+
+
+class PRDiscussion(BaseModel):
+    pr_body: str | None = None
+    issue_comments: list[PRComment] = []
+    review_comments: list[PRComment] = []
+
+
 class GitHubPR(BaseModel):
     owner: str
     repo: str

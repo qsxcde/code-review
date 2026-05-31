@@ -45,6 +45,9 @@ class ReviewAnalysisService:
         pr_data = await self.github_service.fetch_pr(pr_url)
         pr_sha = pr_data.head_sha
 
+        # ── fetch PR discussion (non-blocking, graceful degradation) ──
+        discussion = await self._safe_fetch_discussion(pr_data)
+
         # ── cache check ──
         if pr_sha:
             cached = await find_cached_record(db, user_id, pr_sha, redis=redis)
@@ -60,9 +63,21 @@ class ReviewAnalysisService:
 
         # ── route to multi / single agent ──
         if should_use_multi_agent(pr_data):
-            return await self._run_multi_agent(pr_url, pr_data, record_id, redis)
+            return await self._run_multi_agent(pr_url, pr_data, record_id, redis, discussion)
 
-        return await self._run_single_agent(pr_url, pr_data, record_id, db, redis)
+        return await self._run_single_agent(pr_url, pr_data, record_id, db, redis, discussion)
+
+    # ── helpers ────────────────────────────────────────────────
+
+    async def _safe_fetch_discussion(self, pr_data):
+        """Fetch discussion with graceful degradation."""
+        try:
+            return await self.github_service.fetch_discussion(
+                pr_data.owner, pr_data.repo, pr_data.number,
+            )
+        except Exception:
+            logger.debug("PR 讨论获取失败，继续无讨论上下文分析", exc_info=True)
+            return None
 
     # ── multi-agent (background task) ──────────────────────────
 
@@ -72,6 +87,7 @@ class ReviewAnalysisService:
         pr_data,
         record_id: int,
         redis,
+        discussion=None,
     ) -> JSONResponse:
         github_service = self.github_service
 
@@ -84,7 +100,9 @@ class ReviewAnalysisService:
                         await publish_progress(redis, record_id, event, **kwargs)
 
                     orchestrator = ReviewOrchestrator(github_service)
-                    response = await orchestrator.analyze(pr_url, pr_data, on_progress=_on_progress)
+                    response = await orchestrator.analyze(
+                        pr_url, pr_data, on_progress=_on_progress, discussion=discussion,
+                    )
                     response.analysis_mode = "multi"
                     await save_completed_record(task_db, record_id, response, analysis_mode="multi", redis=redis)
                     await publish_complete(redis, record_id)
@@ -105,11 +123,14 @@ class ReviewAnalysisService:
         record_id: int,
         db: AsyncSession,
         redis,
+        discussion=None,
     ) -> ReviewAnalyzeResponse:
         started_at = time.perf_counter()
         try:
             orchestrator = ReviewOrchestrator(self.github_service)
-            response = await orchestrator.analyze(pr_url, pr_data)
+            response = await orchestrator.analyze(
+                pr_url, pr_data, discussion=discussion,
+            )
             response.analysis_mode = "single"
         except Exception:
             await save_failed_record(db, record_id)

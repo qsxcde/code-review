@@ -7,7 +7,7 @@ these protocols without explicit inheritance.
 
 from typing import Any, Protocol
 
-from app.schemas.github import GitHubPR
+from app.schemas.github import GitHubPR, PRDiscussion
 from app.schemas.review import ReviewResult
 
 
@@ -39,6 +39,10 @@ class GitHubProvider(Protocol):
     async def fetch_parsed_pr(
         self, owner: str, repo: str, number: int
     ) -> GitHubPR: ...
+
+    async def fetch_discussion(
+        self, owner: str, repo: str, number: int
+    ) -> PRDiscussion: ...
 
 
 class GitHubContentClient(Protocol):

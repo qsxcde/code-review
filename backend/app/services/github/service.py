@@ -3,7 +3,7 @@ import logging
 import httpx
 from fastapi import HTTPException, status
 
-from app.schemas.github import GitHubPR
+from app.schemas.github import GitHubPR, PRComment, PRDiscussion
 from app.services.github.client import GITHUB_NETWORK_ERROR_MESSAGES, GitHubAPIClient
 from app.services.github.mapper import map_github_pr_response
 from app.services.github.parser import parse_pr_url
@@ -78,3 +78,58 @@ class GitHubPRService:
             },
         )
         return map_github_pr_response(owner, repo, number, pr_data, files_data)
+
+    async def fetch_discussion(
+        self, owner: str, repo: str, number: int
+    ) -> PRDiscussion:
+        """Fetch PR body + recent issue comments + review comments."""
+        issue_comments: list[PRComment] = []
+        review_comments: list[PRComment] = []
+        pr_body: str | None = None
+
+        # fetch PR body from the PR endpoint
+        try:
+            pr_data = await self.client.get_json(
+                f"/repos/{owner}/{repo}/pulls/{number}"
+            )
+            pr_body = pr_data.get("body")
+        except Exception:
+            logger.debug("Failed to fetch PR body for discussion", exc_info=True)
+
+        # fetch issue comments (PR-level discussion)
+        try:
+            raw = await self.client.get_paginated_json(
+                f"/repos/{owner}/{repo}/issues/{number}/comments"
+            )
+            issue_comments = [
+                PRComment(
+                    author=c.get("user", {}).get("login", "unknown"),
+                    body=c.get("body", ""),
+                    created_at=c.get("created_at", ""),
+                )
+                for c in raw[-50:]  # latest 50 (Phase 2: enough for LLM summarization)
+            ]
+        except Exception:
+            logger.debug("Failed to fetch issue comments", exc_info=True)
+
+        # fetch review comments (inline diff comments)
+        try:
+            raw = await self.client.get_paginated_json(
+                f"/repos/{owner}/{repo}/pulls/{number}/comments"
+            )
+            review_comments = [
+                PRComment(
+                    author=c.get("user", {}).get("login", "unknown"),
+                    body=c.get("body", ""),
+                    created_at=c.get("created_at", ""),
+                )
+                for c in raw[-50:]  # latest 50
+            ]
+        except Exception:
+            logger.debug("Failed to fetch review comments", exc_info=True)
+
+        return PRDiscussion(
+            pr_body=pr_body,
+            issue_comments=issue_comments,
+            review_comments=review_comments,
+        )
