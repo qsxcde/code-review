@@ -41,6 +41,13 @@ export const login = (apiBaseUrl: string, email: string, password: string) =>
 export const register = (apiBaseUrl: string, email: string, password: string) =>
   submitAuth(apiBaseUrl, "/auth/register", email, password);
 
+export const refreshAuth = async (apiBaseUrl: string, refreshToken: string) => {
+  return apiRequest<AuthSession>(apiBaseUrl, "/auth/refresh", {
+    method: "POST",
+    json: { refresh_token: refreshToken },
+  });
+};
+
 export const logout = async (apiBaseUrl: string, accessToken: string, refreshToken: string) => {
   await apiRequest<void>(apiBaseUrl, "/auth/logout", {
     method: "POST",
