@@ -26,6 +26,7 @@ from app.services.review.record_service import (
     save_failed_record,
     set_record_running,
 )
+from app.services.review.feedback_service import get_helpful_examples
 from app.services.review.rule_service import get_enabled_rules
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,9 @@ class ReviewAnalysisService:
 
         # ── load custom review rules ──
         custom_rules = await self._safe_fetch_rules(db, user_id)
+
+        # ── load helpful examples for few-shot injection ──
+        helpful_examples = await self._safe_fetch_examples(db, user_id)
 
         # ── cache check (exact SHA match → full response cached) ──
         if pr_sha:
@@ -91,9 +95,9 @@ class ReviewAnalysisService:
 
         # ── route ──
         if should_use_multi_agent(pr_data):
-            return await self._run_multi_agent(pr_url, pr_data, record_id, redis, discussion, custom_rules)
+            return await self._run_multi_agent(pr_url, pr_data, record_id, redis, discussion, custom_rules, helpful_examples)
 
-        response = await self._run_single_agent(pr_url, pr_data, record_id, db, redis, discussion, custom_rules)
+        response = await self._run_single_agent(pr_url, pr_data, record_id, db, redis, discussion, custom_rules, helpful_examples)
 
         # ── merge incremental result ──
         if incremental_files and previous_response:
@@ -169,6 +173,18 @@ class ReviewAnalysisService:
             logger.debug("自定义规则加载失败", exc_info=True)
             return []
 
+    async def _safe_fetch_examples(self, db, user_id) -> dict[str, list[dict]]:
+        """Load helpful examples per agent for few-shot injection, with graceful degradation."""
+        try:
+            return {
+                "[安全]": await get_helpful_examples(db, user_id, "安全", limit=3),
+                "[性能]": await get_helpful_examples(db, user_id, "性能", limit=3),
+                "[风格]": await get_helpful_examples(db, user_id, "风格", limit=3),
+            }
+        except Exception:
+            logger.debug("Few-shot 示例加载失败", exc_info=True)
+            return {}
+
     async def _safe_fetch_discussion(self, pr_data):
         """Fetch discussion with graceful degradation."""
         try:
@@ -189,6 +205,7 @@ class ReviewAnalysisService:
         redis,
         discussion=None,
         custom_rules=None,
+        helpful_examples=None,
     ) -> JSONResponse:
         github_service = self.github_service
 
@@ -204,6 +221,7 @@ class ReviewAnalysisService:
                     response = await orchestrator.analyze(
                         pr_url, pr_data, on_progress=_on_progress,
                         discussion=discussion, custom_rules=custom_rules,
+                        helpful_examples=helpful_examples,
                     )
                     response.analysis_mode = "multi"
                     await save_completed_record(task_db, record_id, response, analysis_mode="multi", redis=redis)
@@ -227,12 +245,14 @@ class ReviewAnalysisService:
         redis,
         discussion=None,
         custom_rules=None,
+        helpful_examples=None,
     ) -> ReviewAnalyzeResponse:
         started_at = time.perf_counter()
         try:
             orchestrator = ReviewOrchestrator(self.github_service)
             response = await orchestrator.analyze(
-                pr_url, pr_data, discussion=discussion, custom_rules=custom_rules,
+                pr_url, pr_data, discussion=discussion,
+                custom_rules=custom_rules, helpful_examples=helpful_examples,
             )
             response.analysis_mode = "single"
         except Exception:

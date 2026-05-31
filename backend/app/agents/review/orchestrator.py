@@ -145,36 +145,49 @@ async def _run_single_agent(
     return await graph.analyze(pr_url)
 
 
-def _inject_custom_rules(
-    agent: SpecialistAgent, custom_rules: list[ReviewRuleOut] | None
+def _build_enhanced_prompt(
+    agent: SpecialistAgent,
+    custom_rules: list[ReviewRuleOut] | None = None,
+    helpful_examples: list[dict] | None = None,
 ) -> str:
-    """Append matching custom rule prompts to the agent's system prompt."""
-    base_prompt = agent.system_prompt
-    if not custom_rules:
-        return base_prompt
+    """Build agent prompt with optional custom rules and few-shot examples."""
+    prompt = agent.system_prompt
 
-    # match rules by category: "security" → security agent, etc.
-    agent_category = agent.name  # "security", "performance", "style"
-    matching = [
-        r for r in custom_rules
-        if r.category == agent_category or r.category == "custom"
-    ]
-    if not matching:
-        return base_prompt
+    # ── few-shot examples from historical helpful feedback ──
+    if helpful_examples:
+        example_lines = [
+            f"示例{i + 1}: [文件: {ex['file']}"
+            + (f":{ex['line']}" if ex.get('line') else "")
+            + f"] {ex['issue']} → 建议: {ex['suggestion']}"
+            for i, ex in enumerate(helpful_examples[:5])
+        ]
+        prompt += "\n\n## 参考示例（历史高质量审查发现，请模仿其分析风格和深度）\n"
+        prompt += "\n".join(example_lines)
 
-    rules_text = "\n\n".join(
-        f"[自定义规则: {r.name}] {r.prompt_content}"
-        for r in sorted(matching, key=lambda r: r.priority, reverse=True)
-    )
-    return f"{base_prompt}\n\n## 团队自定义审查规则\n{rules_text}"
+    # ── custom rules ──
+    if custom_rules:
+        agent_category = agent.name
+        matching = [
+            r for r in custom_rules
+            if r.category == agent_category or r.category == "custom"
+        ]
+        if matching:
+            rules_text = "\n\n".join(
+                f"[自定义规则: {r.name}] {r.prompt_content}"
+                for r in sorted(matching, key=lambda r: r.priority, reverse=True)
+            )
+            prompt += f"\n\n## 团队自定义审查规则\n{rules_text}"
+
+    return prompt
 
 
 async def _run_single_agent_for(
     agent: SpecialistAgent,
     context: dict,
     custom_rules: list[ReviewRuleOut] | None = None,
+    helpful_examples: list[dict] | None = None,
 ) -> tuple[str, ReviewResult]:
-    prompt = _inject_custom_rules(agent, custom_rules)
+    prompt = _build_enhanced_prompt(agent, custom_rules, helpful_examples)
     llm = LLMReviewService(
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
@@ -303,6 +316,7 @@ async def _run_multi_agent(
     on_progress: Callable | None = None,
     discussion: PRDiscussion | None = None,
     custom_rules: list[ReviewRuleOut] | None = None,
+    helpful_examples: list[dict] | None = None,
 ) -> ReviewAnalyzeResponse:
     started_at = time.perf_counter()
 
@@ -342,7 +356,8 @@ async def _run_multi_agent(
             )
             continue
         active_agents.append(agent)
-        tasks.append(_run_single_agent_for(agent, ctx, custom_rules))
+        agent_examples = (helpful_examples or {}).get(agent.category_prefix, [])
+        tasks.append(_run_single_agent_for(agent, ctx, custom_rules, agent_examples))
 
     agent_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -442,6 +457,7 @@ class ReviewOrchestrator:
         on_progress: Callable | None = None,
         discussion: PRDiscussion | None = None,
         custom_rules: list[ReviewRuleOut] | None = None,
+        helpful_examples: dict[str, list[dict]] | None = None,
     ) -> ReviewAnalyzeResponse:
         if should_use_multi_agent(pr_data):
             logger.info(
@@ -452,7 +468,7 @@ class ReviewOrchestrator:
             return await _run_multi_agent(
                 self.github_service, pr_data, context_builder, pr_url,
                 on_progress=on_progress, discussion=discussion,
-                custom_rules=custom_rules,
+                custom_rules=custom_rules, helpful_examples=helpful_examples,
             )
 
         logger.info(
