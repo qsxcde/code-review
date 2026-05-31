@@ -7,11 +7,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import redis.asyncio as aioredis
-
 from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent
 from app.core.config import Settings, get_settings
-from app.core.config import settings as app_settings
 from app.core.db import async_session, get_db
 from app.core.redis import get_redis
 from app.core.rate_limit import require_rate_limit
@@ -98,7 +95,6 @@ async def analyze_pr(
     )
 
     if _should_use_multi_agent(pr_data):
-        redis = await aioredis.from_url(app_settings.redis_url, decode_responses=True)
 
         async def _run_analysis():
             try:
@@ -117,8 +113,6 @@ async def analyze_pr(
                 async with async_session() as task_db:
                     await save_failed_record(task_db, record_id)
                 await pg.publish_error(redis, record_id, "orchestrator", str(exc)[:200], 0)
-            finally:
-                await redis.close()
 
         asyncio.create_task(_run_analysis())
         return JSONResponse(status_code=202, content={"record_id": record_id, "status": "running"})

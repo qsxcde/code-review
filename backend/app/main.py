@@ -36,7 +36,10 @@ def create_app() -> FastAPI:
     async def startup_services() -> None:
         from app.core.redis import get_redis
 
-        await get_redis()
+        try:
+            await get_redis()
+        except Exception:
+            logger.warning("Redis 连接失败，部分功能（速率限制、热缓存）将降级运行", exc_info=True)
 
     @app.on_event("shutdown")
     async def shutdown_services() -> None:
