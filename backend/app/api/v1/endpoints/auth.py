@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.rate_limit import require_rate_limit
 from app.core.redis import get_redis
 from app.core.security import require_jwt_user
 from app.schemas.auth import (
@@ -13,7 +14,11 @@ from app.schemas.auth import (
 )
 from app.services.auth.service import login, register, revoke_refresh_token, rotate_tokens
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(
+    prefix="/auth",
+    tags=["auth"],
+    dependencies=[Depends(require_rate_limit)],
+)
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
