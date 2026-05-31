@@ -16,6 +16,7 @@ from app.agents.review.specialist import MULTI_AGENTS, SpecialistAgent
 from app.core.config import settings
 from app.schemas.github import GitHubPR, PRDiscussion
 from app.schemas.review import ReviewAnalyzeResponse, ReviewPRInfo, ReviewResult
+from app.schemas.review_rule import ReviewRuleOut
 from app.services.llm.service import LLMReviewService
 
 logger = logging.getLogger(__name__)
@@ -144,10 +145,36 @@ async def _run_single_agent(
     return await graph.analyze(pr_url)
 
 
+def _inject_custom_rules(
+    agent: SpecialistAgent, custom_rules: list[ReviewRuleOut] | None
+) -> str:
+    """Append matching custom rule prompts to the agent's system prompt."""
+    base_prompt = agent.system_prompt
+    if not custom_rules:
+        return base_prompt
+
+    # match rules by category: "security" → security agent, etc.
+    agent_category = agent.name  # "security", "performance", "style"
+    matching = [
+        r for r in custom_rules
+        if r.category == agent_category or r.category == "custom"
+    ]
+    if not matching:
+        return base_prompt
+
+    rules_text = "\n\n".join(
+        f"[自定义规则: {r.name}] {r.prompt_content}"
+        for r in sorted(matching, key=lambda r: r.priority, reverse=True)
+    )
+    return f"{base_prompt}\n\n## 团队自定义审查规则\n{rules_text}"
+
+
 async def _run_single_agent_for(
     agent: SpecialistAgent,
     context: dict,
+    custom_rules: list[ReviewRuleOut] | None = None,
 ) -> tuple[str, ReviewResult]:
+    prompt = _inject_custom_rules(agent, custom_rules)
     llm = LLMReviewService(
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
@@ -155,7 +182,7 @@ async def _run_single_agent_for(
     )
     result = await llm.analyze_payload(
         context,
-        system_prompt=agent.system_prompt,
+        system_prompt=prompt,
         stage=f"agent:{agent.name}",
     )
     return agent.category_prefix, result
@@ -275,6 +302,7 @@ async def _run_multi_agent(
     pr_url: str,
     on_progress: Callable | None = None,
     discussion: PRDiscussion | None = None,
+    custom_rules: list[ReviewRuleOut] | None = None,
 ) -> ReviewAnalyzeResponse:
     started_at = time.perf_counter()
 
@@ -314,7 +342,7 @@ async def _run_multi_agent(
             )
             continue
         active_agents.append(agent)
-        tasks.append(_run_single_agent_for(agent, ctx))
+        tasks.append(_run_single_agent_for(agent, ctx, custom_rules))
 
     agent_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -413,6 +441,7 @@ class ReviewOrchestrator:
         pr_data: GitHubPR,
         on_progress: Callable | None = None,
         discussion: PRDiscussion | None = None,
+        custom_rules: list[ReviewRuleOut] | None = None,
     ) -> ReviewAnalyzeResponse:
         if should_use_multi_agent(pr_data):
             logger.info(
@@ -423,6 +452,7 @@ class ReviewOrchestrator:
             return await _run_multi_agent(
                 self.github_service, pr_data, context_builder, pr_url,
                 on_progress=on_progress, discussion=discussion,
+                custom_rules=custom_rules,
             )
 
         logger.info(
