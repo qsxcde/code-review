@@ -11,7 +11,6 @@ from app.core.security import require_jwt_user
 from app.schemas.review import (
     MockReviewRequest,
     ReviewAnalyzeRequest,
-    ReviewAnalyzeResponse,
     ReviewResult,
 )
 from app.services.github import get_github_pr_service
@@ -41,14 +40,14 @@ async def analyze_mock_pr(
     return await service.analyze_mock_pr(request)
 
 
-@router.post("/analyze", response_model=ReviewAnalyzeResponse)
+@router.post("/analyze")
 async def analyze_pr(
     request: ReviewAnalyzeRequest,
     settings: Settings = Depends(get_settings),
     user_id: int = Depends(require_jwt_user),
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-) -> ReviewAnalyzeResponse:
+):
     github_service = get_github_pr_service(
         token=settings.github_token,
         proxy=settings.github_api_proxy,

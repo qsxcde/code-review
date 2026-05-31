@@ -90,7 +90,10 @@ class Settings(BaseSettings):
         return value
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            # Resolve .env relative to backend/ directory, regardless of CWD
+            __file__.rsplit("app", 1)[0] + ".env"
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )

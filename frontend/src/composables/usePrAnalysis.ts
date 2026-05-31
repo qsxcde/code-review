@@ -164,7 +164,7 @@ export const usePrAnalysis = (
     const parsedLines = parsePatchToCodeLines(file?.patch);
     codeLines.value = parsedLines.length > 0
       ? parsedLines
-      : [{ line: 1, mark: " ", code: file ? "该文件没有可展示的 patch 内容" : "暂无代码变更内容" }];
+      : [{ line: 1, mark: " ", code: file ? "该文件无可展示的代码差异（可能为二进制或重命名）" : "选择左侧文件查看代码变更" }];
   };
 
   const handleAnalyze = async () => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import { Files } from "@element-plus/icons-vue";
 import type { PullRequestInfo } from "../types/review";
 
@@ -15,6 +16,81 @@ const langMap: Record<string, string> = {
   go: "Go",
   sql: "SQL",
 };
+
+const detailVisible = ref(false);
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const renderInlineMarkdown = (value: string) =>
+  escapeHtml(value)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+
+const renderedDescription = computed(() => {
+  const markdown = props.pullRequest.description?.trim() || "暂无 PR 描述";
+  const lines = markdown.split(/\r?\n/);
+  const html: string[] = [];
+  let listOpen = false;
+  let codeOpen = false;
+
+  const closeList = () => {
+    if (!listOpen) return;
+    html.push("</ul>");
+    listOpen = false;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      closeList();
+      html.push(codeOpen ? "</code></pre>" : "<pre><code>");
+      codeOpen = !codeOpen;
+      continue;
+    }
+
+    if (codeOpen) {
+      html.push(`${escapeHtml(line)}\n`);
+      continue;
+    }
+
+    if (!trimmed) {
+      closeList();
+      continue;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      if (!listOpen) {
+        html.push("<ul>");
+        listOpen = true;
+      }
+      html.push(`<li>${renderInlineMarkdown(trimmed.slice(2))}</li>`);
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${renderInlineMarkdown(trimmed)}</p>`);
+  }
+
+  closeList();
+  if (codeOpen) html.push("</code></pre>");
+  return html.join("");
+});
 </script>
 
 <template>
@@ -35,10 +111,9 @@ const langMap: Record<string, string> = {
           </span>
         </div>
         <h2>{{ pullRequest.title }}</h2>
-        <div class="description-marquee" :title="pullRequest.description">
-          <span>{{ pullRequest.description }}</span>
-          <span aria-hidden="true">{{ pullRequest.description }}</span>
-        </div>
+        <button class="description-summary" type="button" :title="pullRequest.description" @click="detailVisible = true">
+          {{ pullRequest.description || "暂无 PR 描述" }}
+        </button>
       </div>
       <div class="stat-grid">
         <article>
@@ -64,6 +139,16 @@ const langMap: Record<string, string> = {
       <span><em>状态</em><el-tag class="open-tag" size="small">{{ pullRequest.state }}</el-tag></span>
     </div>
   </el-card>
+
+  <el-dialog
+    v-model="detailVisible"
+    class="pr-description-dialog"
+    title="PR 详情介绍"
+    width="min(760px, 92vw)"
+    append-to-body
+  >
+    <article class="description-detail" v-html="renderedDescription" />
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">
@@ -109,34 +194,22 @@ const langMap: Record<string, string> = {
     white-space: nowrap;
   }
 
-  .description-marquee {
-    position: relative;
+  .description-summary {
+    display: block;
     overflow: hidden;
-    max-width: 100%;
+    width: 100%;
     height: 20px;
-    margin: 0;
+    padding: 0;
+    border: 0;
     color: $muted;
     font-size: 12px;
     line-height: 20px;
+    text-align: left;
+    text-overflow: ellipsis;
     white-space: nowrap;
-
-    span {
-      display: inline-block;
-      min-width: 100%;
-      padding-right: 48px;
-      animation: pr-description-marquee 14s linear infinite;
-    }
-
-    &:hover span {
-      animation-play-state: paused;
-    }
+    background: transparent;
+    cursor: pointer;
   }
-}
-
-@keyframes pr-description-marquee {
-  0% { transform: translateX(0); }
-  45% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
 }
 
 .repo-line {
@@ -230,5 +303,76 @@ const langMap: Record<string, string> = {
 
   .addition { color: $success; }
   .deletion { color: $danger; }
+}
+
+.description-detail {
+  max-height: min(68vh, 680px);
+  overflow: auto;
+  color: $text;
+  line-height: 1.75;
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(p),
+  :deep(ul),
+  :deep(pre) {
+    margin: 0;
+  }
+
+  :deep(h1) {
+    margin-bottom: 16px;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  :deep(h2) {
+    margin-top: 18px;
+    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  :deep(h3) {
+    margin-top: 14px;
+    margin-bottom: 8px;
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  :deep(p) {
+    margin-bottom: 10px;
+    color: $muted;
+    font-size: 14px;
+  }
+
+  :deep(ul) {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding-left: 20px;
+    color: $muted;
+    font-size: 14px;
+  }
+
+  :deep(code) {
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: $text;
+    background: #f1f5f9;
+  }
+
+  :deep(pre) {
+    overflow: auto;
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  :deep(a) {
+    color: $primary;
+    text-decoration: none;
+  }
 }
 </style>

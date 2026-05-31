@@ -8,7 +8,6 @@ defineProps<{
   analysisStatusText: string;
   analysisDuration: number;
   analyzedUrl: string;
-  backendWarning: string;
 }>();
 
 const emit = defineEmits<{
@@ -40,7 +39,6 @@ const emit = defineEmits<{
       <em v-if="analysisStatus === 'completed'">耗时：{{ analysisDuration.toFixed(1) }}s</em>
     </div>
     <p class="analyzed-url">当前 PR：{{ analyzedUrl }}</p>
-    <p v-if="backendWarning" class="backend-warning">{{ backendWarning }}</p>
   </el-card>
 </template>
 
@@ -145,12 +143,4 @@ const emit = defineEmits<{
   white-space: nowrap;
 }
 
-.backend-warning {
-  overflow: hidden;
-  margin: -4px 0 0;
-  color: $warning;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 </style>

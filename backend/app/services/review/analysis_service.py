@@ -12,9 +12,8 @@ from app.agents.review.orchestrator import ReviewOrchestrator, should_use_multi_
 from app.core.config import Settings
 from app.core.db import async_session
 from app.schemas.review import ReviewAnalyzeResponse
-from app.services.llm import LLMReviewService
-from app.services.review import progress as pg
-from app.services.review import (
+from app.services.review.progress import publish_complete, publish_error, publish_progress
+from app.services.review.record_service import (
     create_pending_record,
     find_cached_record,
     save_completed_record,
@@ -82,17 +81,17 @@ class ReviewAnalysisService:
                     await set_record_running(task_db, record_id)
 
                     async def _on_progress(event: str, **kwargs):
-                        await pg.publish_progress(redis, record_id, event, **kwargs)
+                        await publish_progress(redis, record_id, event, **kwargs)
 
                     orchestrator = ReviewOrchestrator(github_service)
                     response = await orchestrator.analyze(pr_url, pr_data, on_progress=_on_progress)
                     response.analysis_mode = "multi"
                     await save_completed_record(task_db, record_id, response, analysis_mode="multi", redis=redis)
-                    await pg.publish_complete(redis, record_id)
+                    await publish_complete(redis, record_id)
             except Exception as exc:
                 async with async_session() as task_db:
                     await save_failed_record(task_db, record_id)
-                await pg.publish_error(redis, record_id, "orchestrator", str(exc)[:200], 0)
+                await publish_error(redis, record_id, "orchestrator", str(exc)[:200], 0)
 
         asyncio.create_task(_run_analysis())
         return JSONResponse(status_code=202, content={"record_id": record_id, "status": "running"})

@@ -7,7 +7,7 @@ import {
   submitReviewFeedback,
 } from "../api/historyApi";
 import type { FeedbackRating, ReviewRecord, ReviewRecordDetail } from "../types/history";
-import { riskLabel } from "../constants/labels";
+export { riskLabel } from "../constants/labels";
 
 export const statusOptions = [
   { label: "全部状态", value: "" },

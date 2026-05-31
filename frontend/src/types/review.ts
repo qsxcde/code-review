@@ -83,7 +83,7 @@ export interface CodeLine {
 
 
 export interface AiSuggestion {
-  level: "高风险" | "中风险";
+  level: "高风险" | "中风险" | "低风险";
   title: string;
   line: string;
   description: string;
@@ -94,6 +94,10 @@ export interface Issue {
   file: string;
   level: RiskLevel;
   agentSource?: AgentSource;
+  impact?: string;
+  suggestion?: string;
+  category?: string;
+  confidence?: number;
 }
 
 export interface ReviewRisk {

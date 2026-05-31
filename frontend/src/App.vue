@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import {
   Clock,
@@ -17,6 +17,7 @@ import AnalysisView from "./views/AnalysisView.vue";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const activeView = ref<ActiveView>("analysis");
+const hasVisitedHistory = ref(false);
 
 const {
   authSession,
@@ -43,11 +44,21 @@ const requireLogin = () => {
   openAuthDialog("login");
 };
 
+onMounted(() => {
+  if (!authSession.value) {
+    openAuthDialog("login");
+  }
+});
+
 const handleSelectView = (view: ActiveView) => {
   if (view === "history" && !currentAccessToken.value) {
     requireLogin();
     ElMessage.warning("请先登录后查看历史分析");
     return;
+  }
+
+  if (view === "history") {
+    hasVisitedHistory.value = true;
   }
 
   activeView.value = view;
@@ -66,14 +77,14 @@ const handleSelectView = (view: ActiveView) => {
     />
 
     <AnalysisView
-      v-if="activeView === 'analysis'"
+      v-show="activeView === 'analysis'"
       :api-base-url="apiBaseUrl"
       :access-token="currentAccessToken"
       @require-login="requireLogin"
       @expire-session="expireSession"
     />
 
-    <main v-else-if="activeView === 'history'" class="workspace">
+    <main v-if="hasVisitedHistory" v-show="activeView === 'history'" class="workspace">
       <HistoryView
         :api-base-url="apiBaseUrl"
         :access-token="currentAccessToken"
@@ -81,7 +92,7 @@ const handleSelectView = (view: ActiveView) => {
       />
     </main>
 
-    <main v-else class="workspace placeholder-workspace">
+    <main v-if="activeView !== 'analysis' && activeView !== 'history'" class="workspace placeholder-workspace">
       <section class="placeholder-panel">
         <h2>{{ activeView === "reports" ? "报告中心" : "设置中心" }}</h2>
         <p>该模块稍后接入。</p>

@@ -134,7 +134,6 @@ const renderMarkdownReport = (markdown: string) => {
         :analysis-status-text="analysis.analysisStatusText.value"
         :analysis-duration="analysis.analysisDuration.value"
         :analyzed-url="analysis.analyzedUrl.value"
-        :backend-warning="analysis.backendWarning.value"
         @analyze="analysis.handleAnalyze"
         @update:pr-url="analysis.prUrl.value = $event"
       />

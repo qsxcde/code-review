@@ -16,6 +16,9 @@ export interface GitHubPRResponse {
   state: string;
   author: string;
   html_url: string;
+  private: boolean;
+  created_at: string | null;
+  updated_at: string | null;
   base_branch: string;
   head_branch: string;
   head_sha: string;

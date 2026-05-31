@@ -187,14 +187,14 @@ async def _run_multi_agent(
         ctx = contexts.get(agent.name, {"files": [], "file_count": 0})
         if not ctx.get("files"):
             logger.info(
-                "跳过无可分析diff的Agent",
+                "跳过Agent：PR 未涉及该领域代码变更",
                 extra={"props": {"agent": agent.name, "stage": f"agent:{agent.name}"}},
             )
             if on_progress:
                 await on_progress(
                     "agent_skipped",
                     agent=agent.category_prefix,
-                    message="没有可分析的 diff 内容",
+                    message="该 PR 未涉及相关领域的代码变更，跳过此专家分析",
             )
             continue
         active_agents.append(agent)

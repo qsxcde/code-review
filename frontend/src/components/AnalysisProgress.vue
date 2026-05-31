@@ -29,11 +29,13 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
 
 <template>
   <el-card class="analysis-progress" shadow="never">
-    <header>
-      <strong>{{ progressState.reconnecting ? "重新连接中..." : progressState.currentPhase || "正在准备分析" }}</strong>
-      <span>{{ percent }}%</span>
-    </header>
-    <el-progress :percentage="percent" :stroke-width="10" :show-text="false" />
+    <section class="progress-main">
+      <header>
+        <strong>{{ progressState.reconnecting ? "重新连接中..." : progressState.currentPhase || "正在准备分析" }}</strong>
+        <span>{{ percent }}%</span>
+      </header>
+      <el-progress :percentage="percent" :stroke-width="10" :show-text="false" />
+    </section>
     <div class="agent-grid">
       <article
         v-for="agent in agentNames"
@@ -59,6 +61,7 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
 @use "../styles/variables" as *;
 
 .analysis-progress {
+  overflow: hidden;
   border: 1px solid $border;
   border-radius: 12px;
   background: #fff;
@@ -66,9 +69,17 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
 
   :deep(.el-card__body) {
     display: grid;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+    gap: 18px;
+    align-items: center;
     padding: 16px;
   }
+}
+
+.progress-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 
   header {
     display: flex;
@@ -77,8 +88,17 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
     gap: 12px;
     color: $text;
     font-size: 14px;
+    line-height: 1.25;
+
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     span {
+      flex: 0 0 auto;
       color: $primary;
       font-weight: 900;
     }
@@ -88,34 +108,46 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 
   article {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
-    min-height: 58px;
-    padding: 10px 12px;
+    min-height: 54px;
+    padding: 8px 10px;
     border: 1px solid $line;
     border-radius: 8px;
     background: #fbfdff;
+    overflow: hidden;
 
     div {
       display: grid;
-      gap: 3px;
+      gap: 2px;
       min-width: 0;
     }
 
     strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: $text;
       font-size: 13px;
     }
 
     span,
     small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: $soft;
       font-size: 11px;
+    }
+
+    .el-icon {
+      flex: 0 0 auto;
     }
   }
 }
@@ -134,8 +166,13 @@ const percent = computed(() => Math.max(0, Math.min(100, props.progressState.per
 }
 
 @media (max-width: 900px) {
-  .agent-grid {
+  .analysis-progress :deep(.el-card__body) {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .agent-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 </style>

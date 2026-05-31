@@ -49,6 +49,18 @@ const classifySummaryTag = (text: string, fallback = "优化"): string => {
 export const suggestionLevel = (type: "must_fix" | "should_fix" | "nice_to_have"): AiSuggestion["level"] =>
   type === "must_fix" ? "高风险" : "中风险";
 
+const suggestionLevelForRisk = (severity: "high" | "medium" | "low"): AiSuggestion["level"] => {
+  if (severity === "high") return "高风险";
+  if (severity === "medium") return "中风险";
+  return "低风险";
+};
+
+const riskPriority: Record<"high" | "medium" | "low", number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
 export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
   const risksByFile = data.analysis.risks.reduce<Record<string, RiskFile>>((acc, risk) => {
     const file = acc[risk.file] || {
@@ -89,7 +101,6 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
   const pullRequest: Partial<PullRequestInfo> = {
     repository: `${data.pr.owner}/${data.pr.repo}`,
     title: data.pr.title,
-    description: data.analysis.summary.overview,
     author: data.pr.author,
     sourceBranch: data.pr.headBranch,
     targetBranch: data.pr.baseBranch,
@@ -141,8 +152,7 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
   ];
 
   const riskFiles: RiskFile[] = Object.values(risksByFile)
-    .sort((a, b) => b.high - a.high || b.count - a.count)
-    .slice(0, 3);
+    .sort((a, b) => b.high - a.high || b.count - a.count);
 
   const changedFiles: ChangedFile[] = Object.values(risksByFile)
     .sort((a, b) => b.count - a.count)
@@ -160,19 +170,38 @@ export const mapAnalyzeResponse = (data: ReviewAnalyzeResponse) => {
       };
     });
 
-  const topIssues: Issue[] = data.analysis.risks.slice(0, 3).map((risk) => ({
+  const topIssues: Issue[] = [...data.analysis.risks]
+    .sort((a, b) => riskPriority[a.severity] - riskPriority[b.severity])
+    .map((risk) => ({
+      title: stripAgentPrefix(risk.issue),
+      file: `${risk.file}${risk.line ? `:${risk.line}` : ""}`,
+      level: risk.severity,
+      agentSource: extractAgentSource(risk.issue),
+      impact: risk.impact,
+      suggestion: risk.suggestion,
+      category: risk.category,
+      confidence: risk.confidence,
+    }));
+
+  const riskSuggestions: AiSuggestion[] = data.analysis.risks.map((risk) => ({
+    level: suggestionLevelForRisk(risk.severity),
     title: stripAgentPrefix(risk.issue),
-    file: `${risk.file}${risk.line ? `:${risk.line}` : ""}`,
-    level: risk.severity,
-    agentSource: extractAgentSource(risk.issue),
+    line: risk.file,
+    description: [
+      risk.line ? `位置：${risk.file}:${risk.line}` : `位置：${risk.file}`,
+      risk.impact ? `影响：${risk.impact}` : "",
+      risk.suggestion ? `建议：${risk.suggestion}` : "",
+    ].filter(Boolean).join("\n"),
   }));
 
-  const aiSuggestions: AiSuggestion[] = data.analysis.suggestions.slice(0, 3).map((suggestion) => ({
+  const reviewSuggestions: AiSuggestion[] = data.analysis.suggestions.map((suggestion) => ({
     level: suggestionLevel(suggestion.type),
     title: suggestion.type === "must_fix" ? "必须修复建议" : "Review 建议",
     line: suggestion.file,
     description: suggestion.comment,
   }));
+
+  const aiSuggestions: AiSuggestion[] = [...riskSuggestions, ...reviewSuggestions];
 
   return {
     pullRequest,
@@ -212,13 +241,21 @@ export const mapGitHubFiles = (
   });
 };
 
+const formatPrTime = (value: string | null) => {
+  if (!value) return "";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+};
+
 export const mapGitHubPRToPullRequest = (data: GitHubPRResponse): Partial<PullRequestInfo> => ({
   repository: `${data.owner}/${data.repo}`,
+  visibility: data.private ? "私有仓库" : "公开仓库",
   title: data.title,
   description: data.body || "暂无 PR 描述",
   author: data.author,
   sourceBranch: data.head_branch,
   targetBranch: data.base_branch,
+  createdAt: formatPrTime(data.created_at),
+  updatedAt: formatPrTime(data.updated_at),
   state: data.state === "closed" ? "Closed" : "Open",
   changedFiles: data.changed_files,
   additions: data.additions,
