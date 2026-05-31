@@ -23,6 +23,9 @@ class GitHubPR(BaseModel):
     state: str
     author: str
     html_url: str
+    private: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
     base_branch: str
     head_branch: str
     head_sha: str = ""

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { Menu, MagicStick, Operation, ArrowRight } from "@element-plus/icons-vue";
 import type { ChangedFile, AiSuggestion, CodeLine } from "../types/review";
 
@@ -12,6 +13,14 @@ defineProps<{
 const emit = defineEmits<{
   "select-file": [path: string];
 }>();
+
+const detailVisible = ref(false);
+const detailSuggestion = ref<AiSuggestion | null>(null);
+
+const openSuggestionDetail = (suggestion: AiSuggestion) => {
+  detailSuggestion.value = suggestion;
+  detailVisible.value = true;
+};
 </script>
 
 <template>
@@ -44,7 +53,7 @@ const emit = defineEmits<{
       </aside>
 
       <section class="code-diff">
-        <p v-if="codeLines.length === 0" class="empty-diff">暂无代码变更内容</p>
+        <p v-if="codeLines.length === 0" class="empty-diff">选择左侧文件查看代码变更</p>
         <div v-for="line in codeLines" :key="`${line.line}-${line.code}`" class="code-line" :class="line.mark === '+' ? 'add' : line.mark === '-' ? 'remove' : ''">
           <span>{{ line.line }}</span>
           <code>{{ line.mark }} {{ line.code }}</code>
@@ -54,18 +63,47 @@ const emit = defineEmits<{
       <aside class="ai-suggestion">
         <h4>AI 建议</h4>
         <p v-if="aiSuggestions.length === 0" class="empty-suggestion">暂无 AI 建议</p>
-        <article v-for="suggestion in aiSuggestions" :key="`${suggestion.line}-${suggestion.title}`">
+        <article v-for="(suggestion, index) in aiSuggestions" :key="`${suggestion.line}-${suggestion.title}-${index}`">
           <div class="suggestion-head">
-            <el-tag :type="suggestion.level === '高风险' ? 'danger' : 'warning'" size="small">{{ suggestion.level }}</el-tag>
+            <el-tag
+              :type="suggestion.level === '高风险' ? 'danger' : suggestion.level === '中风险' ? 'warning' : 'success'"
+              size="small"
+            >
+              {{ suggestion.level }}
+            </el-tag>
             <span>{{ suggestion.line }}</span>
           </div>
           <strong>{{ suggestion.title }}</strong>
-          <p>{{ suggestion.description }}</p>
-          <el-button size="small" text>查看详情 <el-icon><ArrowRight /></el-icon></el-button>
+          <p class="suggestion-preview">{{ suggestion.description }}</p>
+          <el-button size="small" text @click="openSuggestionDetail(suggestion)">
+            查看详情 <el-icon><ArrowRight /></el-icon>
+          </el-button>
         </article>
       </aside>
     </div>
   </el-card>
+
+  <el-dialog
+    v-model="detailVisible"
+    class="suggestion-dialog"
+    title="AI 建议详情"
+    width="min(640px, 92vw)"
+    append-to-body
+  >
+    <section v-if="detailSuggestion" class="suggestion-detail">
+      <div class="suggestion-detail-head">
+        <el-tag
+          :type="detailSuggestion.level === '高风险' ? 'danger' : detailSuggestion.level === '中风险' ? 'warning' : 'success'"
+          size="small"
+        >
+          {{ detailSuggestion.level }}
+        </el-tag>
+        <span>{{ detailSuggestion.line }}</span>
+      </div>
+      <h3>{{ detailSuggestion.title }}</h3>
+      <p>{{ detailSuggestion.description }}</p>
+    </section>
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">
@@ -120,11 +158,15 @@ h4 { font-size: 13px; font-weight: 800; }
 .diff-layout {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr) 268px;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .file-list {
-  overflow: hidden;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-right: 1px solid $line;
   background: #fbfdff;
 }
@@ -201,7 +243,9 @@ h4 { font-size: 13px; font-weight: 800; }
 }
 
 .ai-suggestion {
-  overflow: auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 14px;
   border-left: 1px solid $line;
   background: #fbfdff;
@@ -214,8 +258,10 @@ h4 { font-size: 13px; font-weight: 800; }
   }
 
   strong {
+    min-width: 0;
     color: $text;
     font-size: 13px;
+    overflow-wrap: anywhere;
   }
 
   p {
@@ -223,12 +269,60 @@ h4 { font-size: 13px; font-weight: 800; }
     color: $muted;
     font-size: 12px;
     line-height: 1.6;
+    overflow-wrap: anywhere;
   }
+}
+
+.suggestion-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .suggestion-head {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
+  gap: 8px;
+  color: $soft;
+  font-size: 12px;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.suggestion-detail {
+  display: grid;
+  gap: 14px;
+
+  h3,
+  p {
+    margin: 0;
+  }
+
+  h3 {
+    color: $text;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  p {
+    color: $muted;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+}
+
+.suggestion-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: $soft;
   font-size: 12px;
 }
