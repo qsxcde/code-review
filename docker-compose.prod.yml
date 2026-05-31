@@ -1,0 +1,41 @@
+# 线上部署覆盖文件 — 在 docker-compose.yml 基础上增加 Caddy HTTPS 反向代理
+#
+# 使用方式：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 前提：
+#   1. 域名已解析到服务器 IP
+#   2. 编辑 Caddyfile 中的域名
+#   3. 编辑 backend/.env 中的密钥和密码
+
+services:
+  # ── Caddy HTTPS 反向代理 ──
+  caddy:
+    image: caddy:2-alpine
+    container_name: code-review-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+  # ── 安全加固：覆盖端口，不对外暴露内部服务 ──
+  mysql:
+    ports: []
+
+  redis:
+    ports: []
+
+  frontend:
+    ports: []
+    depends_on:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:

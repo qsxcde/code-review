@@ -105,7 +105,7 @@ export const usePrAnalysis = (
     return "分析完成";
   });
 
-  const analysisMode = computed(() => currentAnalysis.value?.analysis_mode || (currentRecordId.value ? "multi" : "single"));
+  const analysisMode = computed(() => currentRecordId.value ? "multi" : currentAnalysis.value?.analysis_mode || "single");
   const showAsyncProgress = computed(() => isAnalyzing.value && currentRecordId.value !== null);
 
   const agentStats = computed<Record<string, AgentStats>>(() => {
@@ -160,7 +160,7 @@ export const usePrAnalysis = (
     changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
     updateSelectedCodeFile(nextSelectedCodePath);
 
-    activeSummaryTag.value = (data.analysis_mode || analysisMode.value) === "multi" ? "全部" : "通用总结";
+    activeSummaryTag.value = analysisMode.value === "multi" ? "全部" : "通用总结";
     backendWarning.value = mapped.warnings;
     analysisDuration.value = data.durationMs / 1000;
     analysisStatus.value = "completed";
