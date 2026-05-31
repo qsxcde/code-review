@@ -41,6 +41,49 @@ def create_app() -> FastAPI:
         except Exception:
             logger.warning("Redis 连接失败，部分功能（速率限制、热缓存）将降级运行", exc_info=True)
 
+        # ── run unit tests on startup (dev/debug only) ──
+        if settings.debug:
+            _run_startup_tests(logger)
+
+    def _run_startup_tests(log: logging.Logger) -> None:
+        """Run pytest in a background thread and log results."""
+        import subprocess
+        import threading
+        from pathlib import Path
+
+        test_dir = Path(__file__).resolve().parent.parent / "tests"
+
+        def _runner() -> None:
+            try:
+                result = subprocess.run(
+                    ["python", "-m", "pytest", str(test_dir), "-q", "--tb=short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    cwd=str(test_dir.parent),
+                )
+                output = result.stdout.strip() + "\n" + result.stderr.strip()
+                # extract summary line
+                summary = ""
+                for line in output.split("\n"):
+                    if "passed" in line or "failed" in line or "error" in line:
+                        summary = line.strip()
+                        break
+
+                if result.returncode == 0:
+                    log.info("单元测试全部通过 | %s", summary)
+                else:
+                    log.warning("单元测试存在失败 | %s", summary)
+                    for line in output.split("\n"):
+                        if "FAILED" in line or "ERROR" in line or "assert" in line:
+                            log.warning("  %s", line.strip())
+            except subprocess.TimeoutExpired:
+                log.warning("单元测试执行超时（120s）")
+            except Exception:
+                log.warning("单元测试执行异常", exc_info=True)
+
+        threading.Thread(target=_runner, daemon=True).start()
+
     @app.on_event("shutdown")
     async def shutdown_services() -> None:
         import asyncio

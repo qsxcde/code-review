@@ -4,23 +4,23 @@ import type { AuthSession } from "../types/auth";
 const AUTH_STORAGE_KEY = "code-review-auth-session";
 
 export const loadAuthSession = (): AuthSession | null => {
-  const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  const stored = window.sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (!stored) return null;
 
   try {
     return JSON.parse(stored) as AuthSession;
   } catch {
-    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     return null;
   }
 };
 
 export const saveAuthSession = (session: AuthSession) => {
-  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 };
 
 export const clearAuthSession = () => {
-  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
 };
 
 const submitAuth = async (
