@@ -5,6 +5,7 @@ import logging
 import time
 from collections.abc import Callable
 
+from app.agents.interfaces import GitHubProvider
 from app.agents.review.aggregator import detect_conflicts, merge_results
 from app.agents.review.context import ReviewContextBuilder
 from app.agents.review.graph import ReviewGraphRunner
@@ -15,7 +16,6 @@ from app.agents.review.specialist import MULTI_AGENTS, SpecialistAgent
 from app.core.config import settings
 from app.schemas.github import GitHubPR
 from app.schemas.review import ReviewAnalyzeResponse, ReviewPRInfo, ReviewResult
-from app.services.github import GitHubPRService
 from app.services.llm.service import LLMReviewService
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def _should_use_multi_agent(pr_data: GitHubPR) -> bool:
 
 
 async def _run_single_agent(
-    github_service: GitHubPRService,
+    github_service: GitHubProvider,
     pr_url: str,
 ) -> ReviewAnalyzeResponse:
     llm = LLMReviewService(
@@ -154,7 +154,7 @@ async def _phase2_summarize(
 
 
 async def _run_multi_agent(
-    github_service: GitHubPRService,
+    github_service: GitHubProvider,
     pr_data: GitHubPR,
     context_builder,
     pr_url: str,
@@ -288,7 +288,7 @@ async def _run_multi_agent(
 
 
 class ReviewOrchestrator:
-    def __init__(self, github_service: GitHubPRService):
+    def __init__(self, github_service: GitHubProvider):
         self.github_service = github_service
 
     async def analyze(

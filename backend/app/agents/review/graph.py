@@ -2,18 +2,17 @@ import time
 
 from langgraph.graph import END, StateGraph
 
+from app.agents.interfaces import GitHubProvider, LLMProvider
 from app.agents.review.nodes import ReviewWorkflowNodes
 from app.agents.state import ReviewState
 from app.schemas.review import ReviewAnalyzeResponse
-from app.services.github import GitHubPRService
-from app.services.llm import LLMReviewService
 
 
 class ReviewGraphRunner:
     def __init__(
         self,
-        github_service: GitHubPRService,
-        llm_service: LLMReviewService,
+        github_service: GitHubProvider,
+        llm_service: LLMProvider,
     ) -> None:
         nodes = ReviewWorkflowNodes(github_service, llm_service)
         graph = StateGraph(ReviewState)

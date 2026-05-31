@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Any
 
+from app.agents.interfaces import GitHubContentClient
 from app.agents.review.import_parser import parse_imports
 from app.agents.review.truncator import detect_language, smart_truncate
 from app.schemas.github import GitHubPR, GitHubPRFile
@@ -157,7 +158,7 @@ class ReviewContextBuilder:
         }, analyzed_count
 
     async def enhance_files(
-        self, file_dicts: list[dict], owner: str, repo: str, ref: str, client
+        self, file_dicts: list[dict], owner: str, repo: str, ref: str, client: GitHubContentClient | None
     ) -> list[dict]:
         """Enhance file dicts with full content and import analysis. Falls back gracefully.
 

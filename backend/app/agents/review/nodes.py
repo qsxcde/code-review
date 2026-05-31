@@ -1,18 +1,17 @@
 import time
 
+from app.agents.interfaces import GitHubProvider, LLMProvider
 from app.agents.review.context import ReviewContextBuilder
 from app.agents.review.normalizer import ReviewResultNormalizer
 from app.agents.state import ReviewState
 from app.schemas.review import ReviewAnalyzeResponse, ReviewPRInfo
-from app.services.github import GitHubPRService
-from app.services.llm import LLMReviewService
 
 
 class ReviewWorkflowNodes:
     def __init__(
         self,
-        github_service: GitHubPRService,
-        llm_service: LLMReviewService,
+        github_service: GitHubProvider,
+        llm_service: LLMProvider,
         context_builder: ReviewContextBuilder | None = None,
         normalizer: ReviewResultNormalizer | None = None,
     ) -> None:
