@@ -28,10 +28,11 @@ def create_access_token(user_id: int, email: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
-def create_refresh_token(user_id: int) -> str:
+def create_refresh_token(user_id: int, email: str) -> str:
     now = _now()
     payload = {
         "sub": str(user_id),
+        "email": email,
         "type": REFRESH_TYPE,
         "jti": uuid4().hex,
         "iat": now,

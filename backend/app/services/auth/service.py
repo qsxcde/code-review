@@ -82,7 +82,7 @@ async def register(
         )
 
     access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id)
+    refresh_token = create_refresh_token(user.id, user.email)
     jti, payload = extract_jti_payload(refresh_token)
     expire_seconds = payload["exp"] - payload["iat"]
     await redis.setex(
@@ -124,7 +124,7 @@ async def login(
         )
 
     access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id)
+    refresh_token = create_refresh_token(user.id, user.email)
     jti, payload = extract_jti_payload(refresh_token)
     expire_seconds = payload["exp"] - payload["iat"]
     await redis.setex(
@@ -178,7 +178,7 @@ async def rotate_tokens(
 
     email = payload.get("email", "")
     new_access_token = create_access_token(user_id, email)
-    new_refresh_token = create_refresh_token(user_id)
+    new_refresh_token = create_refresh_token(user_id, email)
     new_jti, new_payload = extract_jti_payload(new_refresh_token)
     expire_seconds = new_payload["exp"] - new_payload["iat"]
     await redis.setex(
