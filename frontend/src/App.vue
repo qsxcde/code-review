@@ -4,7 +4,6 @@ import { ElMessage } from "element-plus";
 import {
   Clock,
   DataAnalysis,
-  Document,
   Lock,
   Message,
   Setting,
@@ -38,7 +37,6 @@ const {
 const navItems = computed<NavItem[]>(() => [
   { key: "analysis", label: "PR 分析", icon: DataAnalysis, active: activeView.value === "analysis" },
   { key: "history", label: "历史分析", icon: Clock, active: activeView.value === "history" },
-  { key: "reports", label: "报告中心", icon: Document, active: activeView.value === "reports" },
   { key: "settings", label: "设置中心", icon: Setting, active: activeView.value === "settings" },
 ]);
 
@@ -103,13 +101,6 @@ const handleSelectView = (view: ActiveView) => {
         :access-token="currentAccessToken"
         @require-login="requireLogin"
       />
-    </main>
-
-    <main v-if="activeView === 'reports'" class="workspace placeholder-workspace">
-      <section class="placeholder-panel">
-        <h2>报告中心</h2>
-        <p>该模块稍后接入。</p>
-      </section>
     </main>
 
     <el-dialog
@@ -209,31 +200,6 @@ const handleSelectView = (view: ActiveView) => {
   min-height: 0;
 }
 
-.placeholder-workspace {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.placeholder-panel {
-  display: grid;
-  place-content: center;
-  gap: 8px;
-  min-height: 0;
-  border: 1px solid $border;
-  border-radius: 12px;
-  color: $muted;
-  background: #fff;
-
-  h2,
-  p {
-    margin: 0;
-    text-align: center;
-  }
-
-  h2 {
-    color: $text;
-    font-size: 20px;
-  }
-}
 
 .auth-dialog .el-dialog__body {
   padding-top: 8px;
