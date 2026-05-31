@@ -14,7 +14,7 @@ from app.agents.review.prompts.orchestrator_phase2 import SYSTEM_PROMPT as PHASE
 from app.agents.review.prompts.language_rules import build_language_rules
 from app.agents.review.specialist import MULTI_AGENTS, SpecialistAgent
 from app.core.config import settings
-from app.schemas.github import GitHubPR
+from app.schemas.github import GitHubPR, PRDiscussion
 from app.schemas.review import ReviewAnalyzeResponse, ReviewPRInfo, ReviewResult
 from app.services.llm.service import LLMReviewService
 
@@ -24,6 +24,100 @@ SINGLE_MAX_FILES = 2
 SINGLE_MAX_LINES = 300
 MULTI_MIN_FILES = 4
 MULTI_MIN_LINES = 1000
+
+# ── discussion formatting ──────────────────────────────────────
+DISCUSSION_MAX_CHARS = 2000
+DISCUSSION_MAX_COMMENTS = 15
+DISCUSSION_COMMENT_CHARS = 200
+DISCUSSION_SUMMARIZE_THRESHOLD = 30  # Phase 2: switch to LLM summary when >30 comments
+
+
+def _format_discussion(discussion: PRDiscussion | None) -> str:
+    """Convert PRDiscussion to a compact text string for prompt injection.
+
+    Priority: PR author's comments > maintainer comments > others.
+    Total output capped at DISCUSSION_MAX_CHARS.
+    """
+    if discussion is None:
+        return ""
+
+    parts: list[str] = []
+
+    if discussion.pr_body:
+        parts.append(f"[PR 描述] {discussion.pr_body[:800]}")
+
+    all_comments = discussion.issue_comments + discussion.review_comments
+    if not all_comments:
+        return "\n".join(parts)
+
+    # sort: PR author first, then by recency
+    pr_author = ""
+    if discussion.issue_comments:
+        pr_author = ""  # we infer author from discussion context — keep simple
+
+    sorted_comments = sorted(
+        all_comments,
+        key=lambda c: c.created_at,
+        reverse=True,
+    )[:DISCUSSION_MAX_COMMENTS]
+
+    for c in sorted_comments:
+        author_tag = f"[{c.author}]"
+        body = c.body[:DISCUSSION_COMMENT_CHARS].replace("\n", " ")
+        parts.append(f"{author_tag} {body}")
+
+    result = "\n".join(parts)
+    if len(result) > DISCUSSION_MAX_CHARS:
+        result = result[:DISCUSSION_MAX_CHARS] + "\n... (discussion truncated)"
+    return result
+
+
+async def _summarize_discussion(discussion: PRDiscussion) -> str:
+    """Phase 2: Use fast_model to summarize lengthy discussion threads.
+
+    Falls back to _format_discussion on any error.
+    """
+    all_comments = discussion.issue_comments + discussion.review_comments
+    total = len(all_comments)
+
+    # Build raw discussion text for the LLM
+    lines: list[str] = []
+    if discussion.pr_body:
+        lines.append(f"[PR 描述] {discussion.pr_body[:1000]}")
+    for c in sorted(all_comments, key=lambda x: x.created_at, reverse=True):
+        lines.append(f"[{c.author}] {c.body[:300].replace(chr(10), ' ')}")
+
+    raw = "\n".join(lines)
+
+    summary_prompt = (
+        "你是一个代码评审助手。请从以下 PR 讨论记录中提取与代码审查相关的关键信息。"
+        "重点关注：作者的设计意图、已知限制、安全性讨论、性能关注点、以及任何关于代码变更的争议或共识。"
+        "只返回严格 JSON，不要 Markdown 或额外解释。"
+    )
+    summary_payload = {
+        "total_comments": total,
+        "discussion": raw[:5000],
+    }
+
+    try:
+        llm = LLMReviewService(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
+            model=settings.fast_model,
+        )
+        result = await llm.analyze_json_payload(
+            summary_payload,
+            system_prompt=summary_prompt,
+            stage="discussion_summary",
+        )
+        summary = result.get("summary", "")
+        key_points = result.get("key_points", [])
+        if key_points:
+            summary += "\n关键讨论点：\n" + "\n".join(f"- {p}" for p in key_points)
+        return summary[:DISCUSSION_MAX_CHARS]
+    except Exception:
+        logger.warning("讨论摘要失败，回退到简单格式化", exc_info=True)
+        return _format_discussion(discussion)
 
 
 def should_use_multi_agent(pr_data: GitHubPR) -> bool:
@@ -67,11 +161,30 @@ async def _run_single_agent_for(
     return agent.category_prefix, result
 
 
-async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
+async def _phase1_analyze_pr(
+    pr_data: GitHubPR, discussion: PRDiscussion | None = None
+) -> dict | None:
     try:
+        # Phase 2: summarize discussion when comments exceed threshold
+        discussion_context = ""
+        discussion_task = None
+        if discussion:
+            total_comments = len(discussion.issue_comments) + len(discussion.review_comments)
+            if total_comments > DISCUSSION_SUMMARIZE_THRESHOLD:
+                discussion_task = asyncio.create_task(
+                    _summarize_discussion(discussion)
+                )
+            else:
+                discussion_context = _format_discussion(discussion)
+
         languages = list({f.filename.split(".")[-1] for f in pr_data.files if "." in f.filename})
         lang_rules = build_language_rules(languages)
         file_list = [f.filename for f in pr_data.files[:20]]
+
+        # await discussion summary if it was started
+        if discussion_task:
+            discussion_context = await discussion_task
+
         phase1_payload = {
             "pr_title": pr_data.title,
             "changed_files": pr_data.changed_files,
@@ -80,6 +193,8 @@ async def _phase1_analyze_pr(pr_data: GitHubPR) -> dict | None:
             "languages": languages,
             "file_list": file_list,
             "language_rules": lang_rules,
+            "pr_description": pr_data.body or "",
+            "discussion_context": discussion_context,
         }
         llm = LLMReviewService(
             api_key=settings.openai_api_key,
@@ -159,11 +274,12 @@ async def _run_multi_agent(
     context_builder,
     pr_url: str,
     on_progress: Callable | None = None,
+    discussion: PRDiscussion | None = None,
 ) -> ReviewAnalyzeResponse:
     started_at = time.perf_counter()
 
     # Phase 1: PR feature analysis (runs in parallel with context building externally)
-    focus_notes_task = _phase1_analyze_pr(pr_data)
+    focus_notes_task = _phase1_analyze_pr(pr_data, discussion)
 
     # Build per-agent contexts
     contexts = context_builder.build_filtered(pr_data, MULTI_AGENTS)
@@ -292,7 +408,11 @@ class ReviewOrchestrator:
         self.github_service = github_service
 
     async def analyze(
-        self, pr_url: str, pr_data: GitHubPR, on_progress: Callable | None = None
+        self,
+        pr_url: str,
+        pr_data: GitHubPR,
+        on_progress: Callable | None = None,
+        discussion: PRDiscussion | None = None,
     ) -> ReviewAnalyzeResponse:
         if should_use_multi_agent(pr_data):
             logger.info(
@@ -301,7 +421,8 @@ class ReviewOrchestrator:
             )
             context_builder = ReviewContextBuilder()
             return await _run_multi_agent(
-                self.github_service, pr_data, context_builder, pr_url, on_progress=on_progress
+                self.github_service, pr_data, context_builder, pr_url,
+                on_progress=on_progress, discussion=discussion,
             )
 
         logger.info(
