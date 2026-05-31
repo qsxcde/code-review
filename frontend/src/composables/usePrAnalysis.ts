@@ -2,17 +2,7 @@ import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { analyzePR, fetchGitHubPR, isAsyncAnalyzeResponse, normalizeGitHubPrUrl, streamReviewProgress } from "../api/reviewApi";
 import { fetchReviewRecordDetail, submitReviewFeedback } from "../api/historyApi";
-import {
-  defaultAiSummaryStats,
-  defaultAiSuggestions,
-  defaultChangedFiles,
-  defaultCodeLines,
-  defaultPullRequest,
-  defaultRiskFiles,
-  defaultRiskStats,
-  defaultSummaryItems,
-  defaultTopIssues,
-} from "../data/reviewFixtures";
+
 import {
   mapAnalyzeResponse,
   mapGitHubFiles,
@@ -23,11 +13,19 @@ import { parsePatchToCodeLines } from "../utils/patchParser";
 import { phaseLabel } from "../utils/progressLabels";
 import type {
   AgentStats,
+  AiSuggestion,
+  AiSummaryStats,
+  ChangedFile,
+  CodeLine,
   FeedbackRating,
+  Issue,
   ProgressState,
   PullRequestInfo,
   ReviewAnalyzeResponse,
+  RiskFile,
   RiskLevel,
+  RiskStats,
+  SummaryItem,
 } from "../types/review";
 import type { GitHubPRFile } from "../types/github";
 
@@ -45,7 +43,7 @@ export const usePrAnalysis = (
 ) => {
   const prUrl = ref("https://github.com/octocat/Hello-World/pull/6");
   const isAnalyzing = ref(false);
-  const analysisStatus = ref<"idle" | "analyzing" | "completed" | "failed">("completed");
+  const analysisStatus = ref<"idle" | "analyzing" | "completed" | "failed">("idle");
   const analysisDuration = ref(1.8);
   const analyzedUrl = ref(prUrl.value);
   const activeSummaryTag = ref("全部");
@@ -54,16 +52,32 @@ export const usePrAnalysis = (
   const errorMessage = ref("");
   const selectedCodePath = ref("service/payment_service.py");
   const prFiles = ref<GitHubPRFile[]>([]);
+  const emptyPullRequest: PullRequestInfo = {
+    repository: "",
+    visibility: "公开仓库",
+    title: "",
+    description: "",
+    author: "",
+    sourceBranch: "",
+    targetBranch: "",
+    createdAt: "",
+    updatedAt: "",
+    state: "Open",
+    changedFiles: 0,
+    additions: 0,
+    deletions: 0,
+  };
+
   const currentAnalysis = ref<ReviewAnalyzeResponse | null>(null);
-  const pullRequest = ref<PullRequestInfo>({ ...defaultPullRequest });
-  const summaryItems = ref([...defaultSummaryItems]);
-  const riskFiles = ref([...defaultRiskFiles]);
-  const riskStats = ref({ ...defaultRiskStats });
-  const aiSummaryStats = ref({ ...defaultAiSummaryStats });
-  const changedFiles = ref([...defaultChangedFiles]);
-  const codeLines = ref([...defaultCodeLines]);
-  const aiSuggestions = ref([...defaultAiSuggestions]);
-  const topIssues = ref([...defaultTopIssues]);
+  const pullRequest = ref<PullRequestInfo>({ ...emptyPullRequest });
+  const summaryItems = ref<SummaryItem[]>([]);
+  const riskFiles = ref<RiskFile[]>([]);
+  const riskStats = ref<RiskStats>({ high: 0, medium: 0, low: 0, total: 0 });
+  const aiSummaryStats = ref<AiSummaryStats>({ riskLevel: "低风险", riskTone: "low", riskIssues: 0, involvedFiles: 0, mergeAdvice: "" });
+  const changedFiles = ref<ChangedFile[]>([]);
+  const codeLines = ref<CodeLine[]>([]);
+  const aiSuggestions = ref<AiSuggestion[]>([]);
+  const topIssues = ref<Issue[]>([]);
   const currentRecordId = ref<number | null>(null);
   const feedbackState = ref<Record<string, FeedbackRating>>({});
   const progressState = reactive<ProgressState>({
@@ -90,6 +104,7 @@ export const usePrAnalysis = (
   });
 
   const analysisStatusText = computed(() => {
+    if (analysisStatus.value === "idle") return "提交 PR 链接开始 AI 代码审查";
     if (analysisStatus.value === "analyzing") return "正在获取 PR 变更并进行 AI 分析...";
     if (analysisStatus.value === "failed") return errorMessage.value || "分析失败，请稍后重试";
     return "分析完成";
