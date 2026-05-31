@@ -5,8 +5,8 @@
 🎬 **Demo 视频**：https://www.bilibili.com/video/BV1UhVU6pEc6/
 
  启动项目前需要保证科学上网，否则会报错，因为链接不上github
- 
  务必填入github token和deepseek api key
+ 
 ---
 
 ## 目录
