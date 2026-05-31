@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.schemas.auth import AuthResponse, UserOut
-from app.services.auth.jwt import (
+from app.core.jwt import (
     REFRESH_TYPE,
     create_access_token,
     create_refresh_token,

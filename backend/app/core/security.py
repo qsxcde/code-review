@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 
-from app.services.auth.jwt import ACCESS_TYPE, decode_token
+from app.core.jwt import ACCESS_TYPE, decode_token
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

@@ -130,7 +130,7 @@ class AuthServiceRegisterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 401)
 
     async def test_rotate_tokens_revokes_old_and_issues_new(self):
-        from app.services.auth.jwt import (
+        from app.core.jwt import (
             ACCESS_TYPE,
             REFRESH_TYPE,
             create_refresh_token,
@@ -152,7 +152,7 @@ class AuthServiceRegisterTests(unittest.IsolatedAsyncioTestCase):
         mock_redis.setex.assert_called_once()
 
     async def test_rotate_tokens_revoked_token_raises_401(self):
-        from app.services.auth.jwt import create_refresh_token
+        from app.core.jwt import create_refresh_token
         from app.services.auth.service import rotate_tokens
         from fastapi import HTTPException
 

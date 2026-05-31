@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from app.core.config import Settings
-from app.services.auth.jwt import (
+from app.core.jwt import (
     ACCESS_TYPE,
     REFRESH_TYPE,
     create_access_token,

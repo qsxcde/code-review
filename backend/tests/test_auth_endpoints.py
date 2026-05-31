@@ -107,7 +107,7 @@ class AuthEndpointsIntegrationTests(unittest.TestCase):
         self.assertIn("access_token", body)
 
     def test_refresh_valid_token_returns_200(self):
-        from app.services.auth.jwt import create_refresh_token
+        from app.core.jwt import create_refresh_token
 
         refresh_token = create_refresh_token(1)
         response = self.client.post(
