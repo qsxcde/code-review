@@ -10,7 +10,7 @@ class Feedback(Base):
     __tablename__ = "feedback"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    record_id: Mapped[int] = mapped_column(Integer, ForeignKey("review_records.id"), nullable=False)
+    record_id: Mapped[int] = mapped_column(Integer, ForeignKey("review_records.id", ondelete="CASCADE"), nullable=False)
     risk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     rating: Mapped[str] = mapped_column(
         Enum("helpful", "not_helpful", "false_positive"), nullable=False

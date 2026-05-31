@@ -13,6 +13,7 @@ import { extractAgentSource } from "../mappers/reviewMapper";
 import { parsePatchToCodeLines } from "../utils/patchParser";
 import type {
   AgentStats,
+  AgentSource,
   AiSuggestion,
   AiSummaryStats,
   ChangedFile,
@@ -75,10 +76,22 @@ export const usePrAnalysis = (
   const feedback = useReviewFeedback(apiBaseUrl, getAccessToken);
   const progress = useAnalysisProgress();
 
-  const summaryTags = computed(() => ["全部", "安全", "性能", "风格", "通用"]);
+  const summaryTagToSource: Record<string, AgentSource | "all"> = {
+    "全部": "all",
+    "安全": "安全",
+    "性能": "性能",
+    "风格总结": "风格",
+    "通用总结": "通用",
+  };
+
+  const summaryTags = computed(() =>
+    analysisMode.value === "multi" ? ["全部", "安全", "性能", "风格总结"] : ["通用总结"],
+  );
+
   const filteredSummaryItems = computed(() => {
-    if (activeSummaryTag.value === "全部") return summaryItems.value;
-    return summaryItems.value.filter((item) => item.agentSource === activeSummaryTag.value);
+    const source = summaryTagToSource[activeSummaryTag.value] || "all";
+    if (source === "all") return summaryItems.value;
+    return summaryItems.value.filter((item) => item.agentSource === source);
   });
 
   const selectedFileSuggestions = computed(() => {
@@ -147,7 +160,7 @@ export const usePrAnalysis = (
     changedFiles.value = mapGitHubFiles(githubPR.files, mapped.riskFiles, nextSelectedCodePath);
     updateSelectedCodeFile(nextSelectedCodePath);
 
-    activeSummaryTag.value = "全部";
+    activeSummaryTag.value = (data.analysis_mode || analysisMode.value) === "multi" ? "全部" : "通用总结";
     backendWarning.value = mapped.warnings;
     analysisDuration.value = data.durationMs / 1000;
     analysisStatus.value = "completed";

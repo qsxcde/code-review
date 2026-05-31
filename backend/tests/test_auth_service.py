@@ -7,7 +7,7 @@ from app.schemas.auth import AuthResponse
 class AuthServiceRegisterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self._settings_patch = patch(
-            "app.services.auth.jwt.settings",
+            "app.core.jwt.settings",
             MagicMock(
                 jwt_secret="test-secret-key-that-is-at-least-32-chars!!",
                 jwt_access_token_expire_minutes=15,
@@ -138,7 +138,7 @@ class AuthServiceRegisterTests(unittest.IsolatedAsyncioTestCase):
         )
         from app.services.auth.service import rotate_tokens
 
-        old_refresh = create_refresh_token(42)
+        old_refresh = create_refresh_token(42, "test@example.com")
         mock_redis = MagicMock()
         mock_redis.exists = AsyncMock(return_value=True)
         mock_redis.delete = AsyncMock()
@@ -156,7 +156,7 @@ class AuthServiceRegisterTests(unittest.IsolatedAsyncioTestCase):
         from app.services.auth.service import rotate_tokens
         from fastapi import HTTPException
 
-        old_refresh = create_refresh_token(42)
+        old_refresh = create_refresh_token(42, "test@example.com")
         mock_redis = MagicMock()
         mock_redis.exists = AsyncMock(return_value=False)
 

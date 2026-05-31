@@ -116,17 +116,28 @@ export const useReviewRules = (
     const token = ensureToken();
     if (!token) return;
 
-    await ElMessageBox.confirm(`确认删除规则“${rule.name}”？`, "删除规则", {
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-      type: "warning",
-    });
+    try {
+      await ElMessageBox.confirm(`确认删除规则“${rule.name}”？`, "删除规则", {
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        type: "warning",
+      });
+    } catch {
+      return;
+    }
 
-    await deleteReviewRule(getApiBaseUrl(), token, rule.id);
-    ElMessage.success("规则已删除");
-    await loadRules();
+    try {
+      await deleteReviewRule(getApiBaseUrl(), token, rule.id);
+      rules.value = rules.value.filter((item) => item.id !== rule.id);
+      total.value = Math.max(0, total.value - 1);
+      ElMessage.success("规则已删除");
+      await loadRules();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "规则删除失败";
+      ElMessage.error(message);
+      if (message.includes("401") || message.includes("token")) requireLogin();
+    }
   };
-
   return {
     rules,
     total,

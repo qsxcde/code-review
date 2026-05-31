@@ -98,7 +98,8 @@ async def update_rule(
 
     update_dict = data.model_dump(exclude_unset=True)
     if "file_filters" in update_dict and update_dict["file_filters"] is not None:
-        update_dict["file_filters"] = update_dict["file_filters"].model_dump()
+        ff = update_dict["file_filters"]
+        update_dict["file_filters"] = ff if isinstance(ff, dict) else ff.model_dump()
 
     for key, value in update_dict.items():
         setattr(rule, key, value)

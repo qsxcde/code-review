@@ -4,6 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.core.db import get_db as _orig_get_db
+from app.core.redis import get_redis as _orig_get_redis
+from app.core.security import require_jwt_user as _orig_require_jwt_user
+
 
 class AuthEndpointsIntegrationTests(unittest.TestCase):
     @classmethod
@@ -23,37 +27,23 @@ class AuthEndpointsIntegrationTests(unittest.TestCase):
         cls._mock_redis.exists = AsyncMock(return_value=True)
         cls._mock_redis.delete = AsyncMock()
 
-        # Patch at source module level BEFORE the app is imported.
-        # FastAPI's Depends() stores the function reference at decorator time,
-        # so we must patch the original modules before the auth endpoint module
-        # is imported by app.main.
-        cls._db_patch = patch(
-            "app.core.db.get_db",
-            lambda: cls._mock_db,
-        )
-        cls._db_patch.start()
-
-        cls._redis_patch = patch(
-            "app.core.redis.get_redis",
-            lambda: cls._mock_redis,
-        )
-        cls._redis_patch.start()
-
-        cls._jwt_patch = patch(
-            "app.core.security.require_jwt_user",
-            lambda: 1,
-        )
-        cls._jwt_patch.start()
-
         from app.main import app
 
+        # Use FastAPI dependency_overrides — works regardless of
+        # which test class imported the app first.
+        app.dependency_overrides[_orig_get_db] = lambda: cls._mock_db
+        app.dependency_overrides[_orig_get_redis] = lambda: cls._mock_redis
+        app.dependency_overrides[_orig_require_jwt_user] = lambda: 1
+
+        cls._app = app
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
-        cls._jwt_patch.stop()
-        cls._db_patch.stop()
-        cls._redis_patch.stop()
+        app = cls._app
+        app.dependency_overrides.pop(_orig_get_db, None)
+        app.dependency_overrides.pop(_orig_get_redis, None)
+        app.dependency_overrides.pop(_orig_require_jwt_user, None)
 
     def test_register_valid_request_returns_201(self):
         response = self.client.post(
@@ -109,7 +99,7 @@ class AuthEndpointsIntegrationTests(unittest.TestCase):
     def test_refresh_valid_token_returns_200(self):
         from app.core.jwt import create_refresh_token
 
-        refresh_token = create_refresh_token(1)
+        refresh_token = create_refresh_token(1, "test@example.com")
         response = self.client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": refresh_token},
