@@ -1,5 +1,6 @@
 """Review services."""
 
+from app.services.review.analysis_service import ReviewAnalysisService
 from app.services.review.feedback_service import add_feedback
 from app.services.review.record_service import (
     create_pending_record,
