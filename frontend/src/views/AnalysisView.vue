@@ -146,23 +146,31 @@ const renderMarkdownReport = (markdown: string) => {
     />
 
     <section v-if="analysis.currentAnalysis.value" class="analysis-mode-row">
-      <el-popover
-        v-if="analysis.analysisMode.value === 'multi'"
-        placement="bottom-start"
-        width="260"
-        trigger="hover"
-      >
-        <template #reference>
-          <el-tag type="primary" effect="plain">深度分析 · 3 专家</el-tag>
+      <div class="analysis-badges">
+        <el-popover
+          v-if="analysis.analysisMode.value === 'multi'"
+          placement="bottom-start"
+          width="260"
+          trigger="hover"
+        >
+          <template #reference>
+            <el-tag type="primary" effect="plain">深度分析 · 3 专家</el-tag>
+          </template>
+          <div class="mode-popover">
+            <p v-for="source in ['安全', '性能', '风格']" :key="source">
+              {{ source }}专家：发现 {{ analysis.agentStats.value[source]?.risks || 0 }} 个风险（{{ analysis.agentStats.value[source]?.high || 0 }} 高危）
+            </p>
+            <p>耗时 {{ analysis.analysisDuration.value.toFixed(1) }}s</p>
+          </div>
+        </el-popover>
+        <el-tag v-else type="success" effect="plain">快速分析</el-tag>
+        <template v-if="analysis.currentAnalysis.value.analysis_type === 'incremental'">
+          <el-tag type="warning" effect="plain">增量分析</el-tag>
+          <span class="trend-stat trend-new">新增 {{ analysis.currentAnalysis.value.risk_trend?.new || 0 }}</span>
+          <span class="trend-stat trend-fixed">已修复 {{ analysis.currentAnalysis.value.risk_trend?.fixed || 0 }}</span>
+          <span class="trend-stat trend-unchanged">仍存在 {{ analysis.currentAnalysis.value.risk_trend?.unchanged || 0 }}</span>
         </template>
-        <div class="mode-popover">
-          <p v-for="source in ['安全', '性能', '风格']" :key="source">
-            {{ source }}专家：发现 {{ analysis.agentStats.value[source]?.risks || 0 }} 个风险（{{ analysis.agentStats.value[source]?.high || 0 }} 高危）
-          </p>
-          <p>耗时 {{ analysis.analysisDuration.value.toFixed(1) }}s</p>
-        </div>
-      </el-popover>
-      <el-tag v-else type="success" effect="plain">快速分析</el-tag>
+      </div>
       <el-button class="no-print" @click="printPdf">导出 PDF</el-button>
     </section>
 
@@ -295,8 +303,48 @@ const renderMarkdownReport = (markdown: string) => {
 .analysis-mode-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 32px;
+}
+
+.analysis-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.trend-stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid $line;
+  border-radius: 7px;
+  color: $muted;
+  font-size: 12px;
+  font-weight: 800;
+  background: #fff;
+}
+
+.trend-new {
+  border-color: #fecaca;
+  color: $danger;
+  background: #fff7f7;
+}
+
+.trend-fixed {
+  border-color: #bbf7d0;
+  color: $success;
+  background: #ecfdf3;
+}
+
+.trend-unchanged {
+  border-color: #bfdbfe;
+  color: $primary;
+  background: #eff6ff;
 }
 
 .mode-popover {
