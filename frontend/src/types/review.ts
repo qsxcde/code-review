@@ -147,6 +147,12 @@ export interface ReviewAnalyzeResponse {
   };
   durationMs: number;
   analysis_mode?: "single" | "multi";
+  analysis_type?: "full" | "incremental";
+  risk_trend?: {
+    new: number;
+    fixed: number;
+    unchanged: number;
+  } | null;
 }
 
 export interface ReviewAnalyzeTaskResponse {

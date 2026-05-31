@@ -79,6 +79,31 @@ class GitHubPRService:
         )
         return map_github_pr_response(owner, repo, number, pr_data, files_data)
 
+    async def fetch_compare(
+        self, owner: str, repo: str, base_sha: str, head_sha: str
+    ) -> list[dict[str, object]]:
+        """Fetch files changed between two commits via GitHub Compare API."""
+        try:
+            data = await self.client.get_json(
+                f"/repos/{owner}/{repo}/compare/{base_sha}...{head_sha}"
+            )
+            files = data.get("files", [])
+            return [
+                {
+                    "filename": f.get("filename", ""),
+                    "status": f.get("status", "modified"),
+                    "additions": f.get("additions", 0),
+                    "deletions": f.get("deletions", 0),
+                    "changes": f.get("changes", 0),
+                    "patch": f.get("patch"),
+                }
+                for f in files
+                if isinstance(f, dict)
+            ]
+        except Exception:
+            logger.debug("Compare API failed for %s...%s", base_sha[:8], head_sha[:8], exc_info=True)
+            return []
+
     async def fetch_discussion(
         self, owner: str, repo: str, number: int
     ) -> PRDiscussion:

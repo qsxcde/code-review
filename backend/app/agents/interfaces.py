@@ -44,6 +44,10 @@ class GitHubProvider(Protocol):
         self, owner: str, repo: str, number: int
     ) -> PRDiscussion: ...
 
+    async def fetch_compare(
+        self, owner: str, repo: str, base_sha: str, head_sha: str
+    ) -> list[dict[str, object]]: ...
+
 
 class GitHubContentClient(Protocol):
     """Interface for the GitHub API client used by context enhancement."""

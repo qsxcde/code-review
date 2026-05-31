@@ -125,6 +125,25 @@ async def set_record_running(db: AsyncSession, record_id: int) -> None:
         await db.commit()
 
 
+async def find_previous_record(
+    db: AsyncSession, user_id: int, owner: str, repo: str, pr_number: int
+) -> ReviewRecord | None:
+    """Find the last completed analysis for a PR (for incremental review)."""
+    result = await db.execute(
+        select(ReviewRecord)
+        .where(
+            ReviewRecord.user_id == user_id,
+            ReviewRecord.owner == owner,
+            ReviewRecord.repo == repo,
+            ReviewRecord.pr_number == pr_number,
+            ReviewRecord.status == "completed",
+        )
+        .order_by(desc(ReviewRecord.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_user_record(
     db: AsyncSession, record_id: int, user_id: int
 ) -> ReviewRecord | None:
