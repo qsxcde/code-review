@@ -81,8 +81,16 @@ class ReviewPRInfo(BaseModel):
     deletions: int
 
 
+class RiskTrend(BaseModel):
+    new: int = 0
+    fixed: int = 0
+    unchanged: int = 0
+
+
 class ReviewAnalyzeResponse(BaseModel):
     pr: ReviewPRInfo
     analysis: ReviewResult
     durationMs: int
     analysis_mode: Literal["single", "multi"] | None = None
+    analysis_type: Literal["full", "incremental"] = "full"
+    risk_trend: RiskTrend | None = None
