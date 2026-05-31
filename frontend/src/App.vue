@@ -4,6 +4,7 @@ import { ElMessage } from "element-plus";
 import {
   Clock,
   DataAnalysis,
+  Document,
   Lock,
   Message,
   Setting,
@@ -14,11 +15,13 @@ import AppSidebar from "./components/AppSidebar.vue";
 import HistoryView from "./components/HistoryView.vue";
 import AnalysisView from "./views/AnalysisView.vue";
 import SettingsView from "./views/SettingsView.vue";
+import StatsView from "./views/StatsView.vue";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const activeView = ref<ActiveView>("analysis");
 const hasVisitedHistory = ref(false);
 const hasVisitedSettings = ref(false);
+const hasVisitedStats = ref(false);
 
 const {
   authSession,
@@ -37,6 +40,7 @@ const {
 const navItems = computed<NavItem[]>(() => [
   { key: "analysis", label: "PR 分析", icon: DataAnalysis, active: activeView.value === "analysis" },
   { key: "history", label: "历史分析", icon: Clock, active: activeView.value === "history" },
+  { key: "reports", label: "审查统计", icon: Document, active: activeView.value === "reports" },
   { key: "settings", label: "设置中心", icon: Setting, active: activeView.value === "settings" },
 ]);
 
@@ -51,18 +55,16 @@ onMounted(() => {
 });
 
 const handleSelectView = (view: ActiveView) => {
-  if ((view === "history" || view === "settings") && !currentAccessToken.value) {
+  if ((view === "history" || view === "reports" || view === "settings") && !currentAccessToken.value) {
     requireLogin();
-    ElMessage.warning(view === "history" ? "请先登录后查看历史分析" : "请先登录后管理审查规则");
+    const label = view === "history" ? "历史分析" : view === "reports" ? "审查统计" : "设置中心";
+    ElMessage.warning(`请先登录后查看${label}`);
     return;
   }
 
-  if (view === "history") {
-    hasVisitedHistory.value = true;
-  }
-  if (view === "settings") {
-    hasVisitedSettings.value = true;
-  }
+  if (view === "history") hasVisitedHistory.value = true;
+  if (view === "reports") hasVisitedStats.value = true;
+  if (view === "settings") hasVisitedSettings.value = true;
 
   activeView.value = view;
 };
@@ -89,6 +91,14 @@ const handleSelectView = (view: ActiveView) => {
 
     <main v-if="hasVisitedHistory" v-show="activeView === 'history'" class="workspace">
       <HistoryView
+        :api-base-url="apiBaseUrl"
+        :access-token="currentAccessToken"
+        @require-login="requireLogin"
+      />
+    </main>
+
+    <main v-if="hasVisitedStats" v-show="activeView === 'reports'" class="workspace">
+      <StatsView
         :api-base-url="apiBaseUrl"
         :access-token="currentAccessToken"
         @require-login="requireLogin"
@@ -188,22 +198,11 @@ const handleSelectView = (view: ActiveView) => {
   min-height: 0;
 }
 
-.left-column {
-  grid-template-rows: minmax(340px, 1fr) 310px;
-}
+.left-column { grid-template-rows: minmax(340px, 1fr) 310px; }
+.center-column { grid-template-rows: minmax(0, 1fr); }
+.right-column { min-height: 0; }
 
-.center-column {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.right-column {
-  min-height: 0;
-}
-
-
-.auth-dialog .el-dialog__body {
-  padding-top: 8px;
-}
+.auth-dialog .el-dialog__body { padding-top: 8px; }
 
 .auth-footer {
   display: flex;
@@ -217,13 +216,8 @@ const handleSelectView = (view: ActiveView) => {
 }
 
 .report-dialog {
-  .el-dialog {
-    max-width: 1040px;
-  }
-
-  .el-dialog__body {
-    padding-top: 10px;
-  }
+  .el-dialog { max-width: 1040px; }
+  .el-dialog__body { padding-top: 10px; }
 }
 
 .report-footer {
@@ -233,40 +227,15 @@ const handleSelectView = (view: ActiveView) => {
 }
 
 @media (max-width: 1440px) {
-  .app-shell {
-    grid-template-columns: 236px minmax(0, 1fr);
-  }
-
-  .workspace {
-    padding: 14px;
-  }
-
-  .dashboard-grid {
-    grid-template-columns: 230px minmax(0, 1fr) 260px;
-  }
+  .app-shell { grid-template-columns: 236px minmax(0, 1fr); }
+  .workspace { padding: 14px; }
+  .dashboard-grid { grid-template-columns: 230px minmax(0, 1fr) 260px; }
 }
 
 @media (max-width: 1180px) {
-  html,
-  body,
-  #app {
-    overflow: auto;
-  }
-
-  .app-shell,
-  .workspace {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-  }
-
-  .hero-row,
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .left-column {
-    grid-template-rows: auto auto;
-  }
+  html, body, #app { overflow: auto; }
+  .app-shell, .workspace { height: auto; min-height: 100vh; overflow: visible; }
+  .hero-row, .dashboard-grid { grid-template-columns: 1fr; }
+  .left-column { grid-template-rows: auto auto; }
 }
 </style>

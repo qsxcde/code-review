@@ -5,9 +5,11 @@ import {
   loadAuthSession,
   login,
   logout,
+  refreshAuth,
   register,
   saveAuthSession,
 } from "../api/authApi";
+import { setTokenRefreshFn } from "../api/httpClient";
 import type { AuthSession } from "../types/auth";
 
 export const useAuth = (apiBaseUrl: string) => {
@@ -18,6 +20,21 @@ export const useAuth = (apiBaseUrl: string) => {
   const authPassword = ref("");
   const authLoading = ref(false);
   const currentAccessToken = computed(() => authSession.value?.access_token || "");
+
+  // ── auto-refresh on 401 ──
+  setTokenRefreshFn(async () => {
+    const token = authSession.value?.refresh_token;
+    if (!token) return null;
+    try {
+      const session = await refreshAuth(apiBaseUrl, token);
+      authSession.value = session;
+      saveAuthSession(session);
+      return session.access_token;
+    } catch {
+      expireSession();
+      return null;
+    }
+  });
 
   const openAuthDialog = (mode: "login" | "register") => {
     authMode.value = mode;
