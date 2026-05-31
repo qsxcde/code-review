@@ -21,17 +21,12 @@ import type {
   PullRequestInfo,
   ReviewAnalyzeResponse,
   RiskFile,
-  RiskLevel,
   RiskStats,
   SummaryItem,
 } from "../types/review";
 import type { GitHubPRFile } from "../types/github";
 
-export const riskLabel: Record<RiskLevel, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
-};
+export { riskLabel } from "../constants/labels";
 
 export const usePrAnalysis = (
   apiBaseUrl: string,

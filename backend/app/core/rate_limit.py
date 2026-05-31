@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import Depends, HTTPException, Request, status
 
 from app.core.config import Settings, get_settings
+from app.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,8 @@ async def require_rate_limit(
 
     client = _client_key(request)
 
-    # try Redis first
+    # try Redis first; fall back to in-memory on any error
     try:
-        from app.core.redis import get_redis
-
         redis = await get_redis()
         rkey = _redis_key(client)
         allowed, remaining, retry_after = await _redis_check_and_add(

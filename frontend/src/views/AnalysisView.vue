@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { ElMessage } from "element-plus";
 import { printPdf } from "../utils/printPdf";
 import { riskLabel, usePrAnalysis } from "../composables/usePrAnalysis";
-import { useReviewReport } from "../composables/useReviewReport";
+import { buildReviewReportMarkdown, reviewReportFileName } from "../utils/reviewReport";
 import SearchPanel from "../components/SearchPanel.vue";
 import PRInfoCard from "../components/PRInfoCard.vue";
 import SummaryCard from "../components/SummaryCard.vue";
@@ -32,14 +32,14 @@ const analysis = usePrAnalysis(
 const reportDialogVisible = ref(false);
 const reportMarkdown = ref("");
 
-const { buildReviewReportMarkdown, reportFileName } = useReviewReport({
-  currentAnalysis: analysis.currentAnalysis,
-  pullRequest: analysis.pullRequest,
-  analyzedUrl: analysis.analyzedUrl,
-  riskStats: analysis.riskStats,
-  summaryItems: analysis.summaryItems,
-  topIssues: analysis.topIssues,
-  aiSuggestions: analysis.aiSuggestions,
+const _reportInput = () => ({
+  currentAnalysis: analysis.currentAnalysis.value,
+  pullRequest: analysis.pullRequest.value,
+  analyzedUrl: analysis.analyzedUrl.value,
+  riskStats: analysis.riskStats.value,
+  summaryItems: analysis.summaryItems.value,
+  topIssues: analysis.topIssues.value,
+  aiSuggestions: analysis.aiSuggestions.value,
 });
 
 const downloadTextFile = (content: string, fileName: string) => {
@@ -55,13 +55,13 @@ const downloadTextFile = (content: string, fileName: string) => {
 };
 
 const handleGenerateReport = () => {
-  reportMarkdown.value = buildReviewReportMarkdown();
+  reportMarkdown.value = buildReviewReportMarkdown(_reportInput());
   reportDialogVisible.value = true;
 };
 
 const handleExportResult = () => {
-  const markdown = buildReviewReportMarkdown();
-  downloadTextFile(markdown, reportFileName());
+  const markdown = buildReviewReportMarkdown(_reportInput());
+  downloadTextFile(markdown, reviewReportFileName(_reportInput()));
   ElMessage.success("分析结果已导出");
 };
 
