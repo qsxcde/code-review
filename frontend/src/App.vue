@@ -14,10 +14,12 @@ import type { ActiveView, NavItem } from "./types/navigation";
 import AppSidebar from "./components/AppSidebar.vue";
 import HistoryView from "./components/HistoryView.vue";
 import AnalysisView from "./views/AnalysisView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const activeView = ref<ActiveView>("analysis");
 const hasVisitedHistory = ref(false);
+const hasVisitedSettings = ref(false);
 
 const {
   authSession,
@@ -51,14 +53,17 @@ onMounted(() => {
 });
 
 const handleSelectView = (view: ActiveView) => {
-  if (view === "history" && !currentAccessToken.value) {
+  if ((view === "history" || view === "settings") && !currentAccessToken.value) {
     requireLogin();
-    ElMessage.warning("请先登录后查看历史分析");
+    ElMessage.warning(view === "history" ? "请先登录后查看历史分析" : "请先登录后管理审查规则");
     return;
   }
 
   if (view === "history") {
     hasVisitedHistory.value = true;
+  }
+  if (view === "settings") {
+    hasVisitedSettings.value = true;
   }
 
   activeView.value = view;
@@ -92,9 +97,17 @@ const handleSelectView = (view: ActiveView) => {
       />
     </main>
 
-    <main v-if="activeView !== 'analysis' && activeView !== 'history'" class="workspace placeholder-workspace">
+    <main v-if="hasVisitedSettings" v-show="activeView === 'settings'" class="workspace">
+      <SettingsView
+        :api-base-url="apiBaseUrl"
+        :access-token="currentAccessToken"
+        @require-login="requireLogin"
+      />
+    </main>
+
+    <main v-if="activeView === 'reports'" class="workspace placeholder-workspace">
       <section class="placeholder-panel">
-        <h2>{{ activeView === "reports" ? "报告中心" : "设置中心" }}</h2>
+        <h2>报告中心</h2>
         <p>该模块稍后接入。</p>
       </section>
     </main>
