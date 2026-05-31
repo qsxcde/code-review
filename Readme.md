@@ -2,7 +2,7 @@
 
 > 基于 LLM 的 GitHub Pull Request 自动代码审查工具 —— 输入 PR 链接，秒级生成多维度的结构化审查报告。
 
-🎬 **Demo 视频**：[待补充]
+🎬 **Demo 视频**：https://www.bilibili.com/video/BV1UhVU6pEc6/
 
 ---
 
