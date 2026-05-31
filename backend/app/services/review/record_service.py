@@ -116,6 +116,27 @@ async def create_pending_record(
     return record.id
 
 
+async def set_record_running(db: AsyncSession, record_id: int) -> None:
+    """Mark a review record as running."""
+    result = await db.execute(select(ReviewRecord).where(ReviewRecord.id == record_id))
+    record = result.scalar_one_or_none()
+    if record is not None:
+        record.status = "running"
+        await db.commit()
+
+
+async def get_user_record(
+    db: AsyncSession, record_id: int, user_id: int
+) -> ReviewRecord | None:
+    """Fetch a review record with ownership check."""
+    result = await db.execute(
+        select(ReviewRecord).where(
+            ReviewRecord.id == record_id, ReviewRecord.user_id == user_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def save_completed_record(
     db: AsyncSession,
     record_id: int,

@@ -5,28 +5,17 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.core.security import require_jwt_user
 from app.models.review_record import ReviewRecord
+from app.services.review.record_service import get_user_record
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/review", tags=["review_progress"])
-
-
-async def _check_record(
-    db: AsyncSession, record_id: int, user_id: int
-) -> ReviewRecord | None:
-    result = await db.execute(
-        select(ReviewRecord).where(
-            ReviewRecord.id == record_id, ReviewRecord.user_id == user_id
-        )
-    )
-    return result.scalar_one_or_none()
 
 
 @router.get("/analyze/{record_id}/stream")
@@ -36,7 +25,7 @@ async def stream_progress(
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ):
-    record = await _check_record(db, record_id, user_id)
+    record = await get_user_record(db, record_id, user_id)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Review record not found"

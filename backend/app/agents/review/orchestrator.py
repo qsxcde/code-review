@@ -26,7 +26,7 @@ MULTI_MIN_FILES = 4
 MULTI_MIN_LINES = 1000
 
 
-def _should_use_multi_agent(pr_data: GitHubPR) -> bool:
+def should_use_multi_agent(pr_data: GitHubPR) -> bool:
     total_lines = pr_data.additions + pr_data.deletions
     files = pr_data.changed_files
 
@@ -294,7 +294,7 @@ class ReviewOrchestrator:
     async def analyze(
         self, pr_url: str, pr_data: GitHubPR, on_progress: Callable | None = None
     ) -> ReviewAnalyzeResponse:
-        if _should_use_multi_agent(pr_data):
+        if should_use_multi_agent(pr_data):
             logger.info(
                 "使用多Agent分析",
                 extra={"props": {"files": pr_data.changed_files, "lines": pr_data.additions + pr_data.deletions}},

@@ -4,16 +4,14 @@ import time
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent
+from app.agents.review.orchestrator import ReviewOrchestrator, should_use_multi_agent
 from app.core.config import Settings, get_settings
 from app.core.db import async_session, get_db
 from app.core.redis import get_redis
 from app.core.rate_limit import require_rate_limit
 from app.core.security import require_jwt_user
-from app.models.review_record import ReviewRecord
 from app.schemas.review import (
     MockReviewRequest,
     ReviewAnalyzeRequest,
@@ -28,17 +26,10 @@ from app.services.review.record_service import (
     find_cached_record,
     save_completed_record,
     save_failed_record,
+    set_record_running,
 )
 
 logger = logging.getLogger(__name__)
-
-
-async def save_running_record(db: AsyncSession, record_id: int) -> None:
-    result = await db.execute(select(ReviewRecord).where(ReviewRecord.id == record_id))
-    record = result.scalar_one_or_none()
-    if record is not None:
-        record.status = "running"
-        await db.commit()
 
 
 router = APIRouter(
@@ -94,12 +85,12 @@ async def analyze_pr(
         pr_data.title, pr_data.owner, pr_data.repo, pr_data.number, pr_sha,
     )
 
-    if _should_use_multi_agent(pr_data):
+    if should_use_multi_agent(pr_data):
 
         async def _run_analysis():
             try:
                 async with async_session() as task_db:
-                    await save_running_record(task_db, record_id)
+                    await set_record_running(task_db, record_id)
 
                     async def _on_progress(event: str, **kwargs):
                         await pg.publish_progress(redis, record_id, event, **kwargs)
