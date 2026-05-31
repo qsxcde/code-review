@@ -1,8 +1,9 @@
-import { computed, reactive, ref } from "vue";
+import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { analyzePR, fetchGitHubPR, isAsyncAnalyzeResponse, normalizeGitHubPrUrl, streamReviewProgress } from "../api/reviewApi";
-import { fetchReviewRecordDetail, submitReviewFeedback } from "../api/historyApi";
-
+import { fetchReviewRecordDetail } from "../api/historyApi";
+import { useAnalysisProgress } from "./useAnalysisProgress";
+import { useReviewFeedback } from "./useReviewFeedback";
 import {
   mapAnalyzeResponse,
   mapGitHubFiles,
@@ -10,16 +11,13 @@ import {
 } from "../mappers/reviewMapper";
 import { extractAgentSource } from "../mappers/reviewMapper";
 import { parsePatchToCodeLines } from "../utils/patchParser";
-import { phaseLabel } from "../utils/progressLabels";
 import type {
   AgentStats,
   AiSuggestion,
   AiSummaryStats,
   ChangedFile,
   CodeLine,
-  FeedbackRating,
   Issue,
-  ProgressState,
   PullRequestInfo,
   ReviewAnalyzeResponse,
   RiskFile,
@@ -79,18 +77,8 @@ export const usePrAnalysis = (
   const aiSuggestions = ref<AiSuggestion[]>([]);
   const topIssues = ref<Issue[]>([]);
   const currentRecordId = ref<number | null>(null);
-  const feedbackState = ref<Record<string, FeedbackRating>>({});
-  const progressState = reactive<ProgressState>({
-    percent: 0,
-    currentPhase: "",
-    reconnecting: false,
-    agents: {
-      "[安全]": "idle",
-      "[性能]": "idle",
-      "[风格]": "idle",
-    },
-    agentRisks: {},
-  });
+  const feedback = useReviewFeedback(apiBaseUrl, getAccessToken);
+  const progress = useAnalysisProgress();
 
   const summaryTags = computed(() => ["全部", "安全", "性能", "风格", "通用"]);
   const filteredSummaryItems = computed(() => {
@@ -136,43 +124,12 @@ export const usePrAnalysis = (
     return Array.from(new Set(values));
   });
 
-  const resetProgress = () => {
-    progressState.percent = 0;
-    progressState.currentPhase = "";
-    progressState.reconnecting = false;
-    progressState.agents["[安全]"] = "idle";
-    progressState.agents["[性能]"] = "idle";
-    progressState.agents["[风格]"] = "idle";
-    progressState.agentRisks = {};
-  };
-
-  const updateProgress = (event: Parameters<Parameters<typeof streamReviewProgress>[3]>[0]) => {
-    progressState.reconnecting = event.message === "重新连接中...";
-    if (event.percent !== undefined) progressState.percent = event.percent;
-
-    const nextLabel = phaseLabel(event.event, event.phase, event.agent);
-    progressState.currentPhase = event.message || nextLabel || progressState.currentPhase;
-
-    if (event.agent) {
-      if (event.event === "agent_done") progressState.agents[event.agent] = "done";
-      else if (event.event === "agent_error") progressState.agents[event.agent] = "error";
-      else if (event.event === "agent_skipped") progressState.agents[event.agent] = "skipped";
-      else progressState.agents[event.agent] = "running";
-
-      if (event.event === "agent_done") {
-        progressState.agentRisks[event.agent] = {
-          risks: event.risks || 0,
-          high: event.high || 0,
-        };
-      }
-    }
-  };
-
   const applyAnalyzeResult = (data: ReviewAnalyzeResponse, githubPR: { files: GitHubPRFile[] }, recordId?: number | null) => {
     const mapped = mapAnalyzeResponse(data);
 
     currentAnalysis.value = data;
     currentRecordId.value = recordId ?? null;
+    feedback.setRecordId(currentRecordId.value);
     prFiles.value = githubPR.files;
     pullRequest.value = {
       ...pullRequest.value,
@@ -199,14 +156,6 @@ export const usePrAnalysis = (
     backendWarning.value = mapped.warnings;
     analysisDuration.value = data.durationMs / 1000;
     analysisStatus.value = "completed";
-  };
-
-  const sendAnalysisFeedback = async (riskIndex: number, rating: FeedbackRating) => {
-    if (!currentRecordId.value) return;
-
-    await submitReviewFeedback(apiBaseUrl, getAccessToken(), currentRecordId.value, riskIndex, rating);
-    feedbackState.value[`${currentRecordId.value}-${riskIndex}`] = rating;
-    ElMessage.success("反馈已提交");
   };
 
   const updateSelectedCodeFile = (path: string) => {
@@ -247,7 +196,8 @@ export const usePrAnalysis = (
     prUrl.value = nextUrl;
     backendWarning.value = "";
     currentRecordId.value = null;
-    resetProgress();
+    feedback.setRecordId(null);
+    progress.resetProgress();
 
     try {
       const [data, githubPR] = await Promise.all([
@@ -262,10 +212,10 @@ export const usePrAnalysis = (
 
       if (isAsyncAnalyzeResponse(data)) {
         currentRecordId.value = data.record_id;
-        progressState.currentPhase = `多 Agent 分析中，任务 #${data.record_id}`;
+        progress.progressState.currentPhase = `多 Agent 分析中，任务 #${data.record_id}`;
         let streamError = "";
         await streamReviewProgress(apiBaseUrl, data.record_id, accessToken, (event) => {
-          updateProgress(event);
+          progress.updateProgress(event);
           if (event.event === "error") {
             streamError = event.message || "多 Agent 分析失败";
           }
@@ -318,8 +268,8 @@ export const usePrAnalysis = (
     aiSuggestions,
     topIssues,
     currentRecordId,
-    feedbackState,
-    progressState,
+    feedbackState: feedback.feedbackState,
+    progressState: progress.progressState,
     agentStats,
     analysisMode,
     showAsyncProgress,
@@ -329,7 +279,7 @@ export const usePrAnalysis = (
     selectedFileSuggestions,
     analysisStatusText,
     updateSelectedCodeFile,
-    sendAnalysisFeedback,
+    sendAnalysisFeedback: feedback.sendFeedback,
     handleAnalyze,
   };
 };
