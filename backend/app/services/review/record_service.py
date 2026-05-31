@@ -54,7 +54,7 @@ async def find_cached_record(
     if not pr_sha:
         return None
 
-    cache_key = f"hotcache:review:{pr_sha}"
+    cache_key = f"hotcache:review:{user_id}:{pr_sha}"
 
     # L1: Redis
     if redis:
@@ -150,7 +150,7 @@ async def save_completed_record(
 
     if redis:
         try:
-            cache_key = f"hotcache:review:{record.pr_sha}"
+            cache_key = f"hotcache:review:{record.user_id}:{record.pr_sha}"
             await redis.setex(cache_key, 86400, response.model_dump_json())
         except Exception:
             pass
