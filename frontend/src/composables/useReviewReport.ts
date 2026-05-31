@@ -45,7 +45,7 @@ export const useReviewReport = (state: ReviewReportState) => {
       `- 变更：${pr?.changedFiles ?? state.pullRequest.value.changedFiles} 个文件，+${pr?.additions ?? state.pullRequest.value.additions} / -${pr?.deletions ?? state.pullRequest.value.deletions}`,
       "",
       "## 总结",
-      summary?.overview || state.pullRequest.value.description,
+      summary?.overview ?? state.pullRequest.value.description,
       "",
       "## 风险统计",
       `- 高风险：${metrics?.highRiskCount ?? state.riskStats.value.high}`,

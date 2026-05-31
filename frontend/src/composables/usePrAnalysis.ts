@@ -99,8 +99,7 @@ export const usePrAnalysis = (
   });
 
   const selectedFileSuggestions = computed(() => {
-    const matched = aiSuggestions.value.filter((suggestion) => suggestion.line === selectedCodePath.value);
-    return matched.length > 0 ? matched : aiSuggestions.value;
+    return aiSuggestions.value.filter((suggestion) => suggestion.line === selectedCodePath.value);
   });
 
   const analysisStatusText = computed(() => {

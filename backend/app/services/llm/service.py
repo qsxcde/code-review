@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from app.core.config import settings
 from app.schemas.review import MockReviewRequest, ReviewResult
 from app.services.llm.client import build_chat_model
 from app.services.llm.errors import (
@@ -120,16 +121,20 @@ class LLMReviewService:
                         }
                     },
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail={
-                        "code": f"llm_{error_type}",
-                        "message": LLM_ERROR_MESSAGES[error_type],
+                detail: dict = {
+                    "code": f"llm_{error_type}",
+                    "message": LLM_ERROR_MESSAGES[error_type],
+                }
+                if settings.debug:
+                    detail.update({
                         "stage": stage,
                         "model": self.model,
                         "error_type": error_type,
                         "error_message": error_message,
-                    },
+                    })
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=detail,
                 ) from exc
 
             content = getattr(response, "content", response)
@@ -145,15 +150,19 @@ class LLMReviewService:
                         }
                     },
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail={
-                        "code": "llm_response_format_unsupported",
-                        "message": "模型返回了不支持的响应格式",
+                format_detail: dict = {
+                    "code": "llm_response_format_unsupported",
+                    "message": "模型返回了不支持的响应格式",
+                }
+                if settings.debug:
+                    format_detail.update({
                         "stage": stage,
                         "model": self.model,
                         "response_type": type(content).__name__,
-                    },
+                    })
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=format_detail,
                 )
 
             try:

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import desc, func, select
@@ -145,7 +145,7 @@ async def save_completed_record(
         "low": analysis.metrics.lowRiskCount,
     }
     record.duration_ms = response.durationMs
-    record.completed_at = datetime.utcnow()
+    record.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
     if redis:
@@ -161,7 +161,7 @@ async def save_failed_record(db: AsyncSession, record_id: int) -> None:
     record = result.scalar_one_or_none()
     if record is not None:
         record.status = "failed"
-        record.completed_at = datetime.utcnow()
+        record.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
 

@@ -121,7 +121,7 @@ class ReviewContextBuilder:
             filename = f.filename.lower()
             if any(re.search(p, filename) for p in skip_patterns):
                 continue
-            if "test" in filename:
+            if agent.name != "security" and "test" in filename:
                 continue
             if agent.include_pattern and not re.search(
                 agent.include_pattern, filename

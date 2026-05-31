@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -14,7 +14,7 @@ class AuthEndpointsIntegrationTests(unittest.TestCase):
 
         async def _refresh_side_effect(user):
             user.id = 1
-            user.created_at = datetime.utcnow()
+            user.created_at = datetime.now(timezone.utc)
 
         cls._mock_db.refresh.side_effect = _refresh_side_effect
 
@@ -90,7 +90,7 @@ class AuthEndpointsIntegrationTests(unittest.TestCase):
             id=1,
             email="test@example.com",
             password_hash=password_hash,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         self._mock_db.execute = AsyncMock()

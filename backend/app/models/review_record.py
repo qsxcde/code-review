@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -25,5 +25,5 @@ class ReviewRecord(Base):
     risk_counts: Mapped[dict | None] = mapped_column(JSON)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     pr_sha: Mapped[str | None] = mapped_column(String(64))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
