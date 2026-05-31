@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.review.orchestrator import ReviewOrchestrator, _should_use_multi_agent
+from app.agents.review.orchestrator import ReviewOrchestrator, should_use_multi_agent
 from app.core.config import Settings, get_settings
 from app.core.db import async_session, get_db
 from app.core.redis import get_redis
@@ -94,7 +94,7 @@ async def analyze_pr(
         pr_data.title, pr_data.owner, pr_data.repo, pr_data.number, pr_sha,
     )
 
-    if _should_use_multi_agent(pr_data):
+    if should_use_multi_agent(pr_data):
 
         async def _run_analysis():
             try:
